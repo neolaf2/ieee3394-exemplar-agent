@@ -6,7 +6,7 @@ Tests the P3394 server and client adapters for agent-to-agent communication.
 
 import asyncio
 from src.ieee3394_agent.channels.p3394_client import P3394ClientAdapter
-from src.ieee3394_agent.core.gateway import AgentGateway
+from src.ieee3394_agent.core.gateway_sdk import AgentGateway
 from src.ieee3394_agent.memory.kstar import KStarMemory
 from src.ieee3394_agent.core.storage import AgentStorage
 from src.ieee3394_agent.core.umf import P3394Message, P3394Content, ContentType, P3394Address
@@ -15,13 +15,14 @@ from src.ieee3394_agent.core.umf import P3394Message, P3394Content, ContentType,
 async def test_p3394_agent():
     """Test P3394 agent-to-agent communication"""
     print("\n" + "="*60)
-    print("Testing P3394 Agent-to-Agent Communication")
+    print("Testing P3394 Agent-to-Agent Communication (SDK)")
     print("="*60)
 
-    # Initialize a mock gateway for the client
+    # Initialize a mock gateway for the client (SDK version)
     storage = AgentStorage(agent_name="test-client-agent")
     kstar = KStarMemory(storage=storage)
-    gateway = AgentGateway(kstar_memory=kstar)
+    gateway = AgentGateway(memory=kstar, working_dir=storage.base_dir)
+    await gateway.initialize()  # Load skills
 
     # Create P3394 client
     client = P3394ClientAdapter(gateway)

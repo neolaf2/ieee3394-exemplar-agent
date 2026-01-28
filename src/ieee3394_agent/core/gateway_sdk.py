@@ -106,8 +106,8 @@ class AgentGateway:
             return self._sdk_options
 
         # Import hooks and tools
-        from ..plugins.hooks import create_sdk_hooks
-        from ..plugins.tools import create_sdk_tools
+        from ..plugins.hooks_sdk import create_sdk_hooks
+        from ..plugins.tools_sdk import create_sdk_tools
 
         # Create SDK options
         self._sdk_options = ClaudeAgentOptions(
