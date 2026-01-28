@@ -23,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-ieee3394-agent = "ieee3394_agent.__main__:main"
+ieee3394-agent = "ieee3394_agent.__main__:run"
 
 [build-system]
 requires = ["hatchling"]
