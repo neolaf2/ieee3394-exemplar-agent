@@ -24,6 +24,7 @@ dev = [
 
 [project.scripts]
 ieee3394-agent = "ieee3394_agent.__main__:run"
+ieee3394-cli = "ieee3394_agent.cli_client:main"
 
 [build-system]
 requires = ["hatchling"]

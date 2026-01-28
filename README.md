@@ -37,17 +37,53 @@ export ANTHROPIC_API_KEY='your-api-key-here'
 
 ### Running the Agent
 
-#### Option 1: Daemon + Client (Recommended)
+#### Start the Daemon
 
 ```bash
-# Terminal 1: Start daemon (agent host)
+# Terminal 1: Start daemon with all channels
 uv run ieee3394-agent --daemon
-
-# Terminal 2: Connect client
-uv run ieee3394-agent
 ```
 
-#### Option 2: Using Management Scripts
+This starts:
+- Agent Gateway (core routing engine)
+- CLI Channel Adapter (for CLI clients)
+- UMF Server (for direct UMF protocol)
+
+You'll see:
+```
+🚀 IEEE 3394 Agent Host starting...
+   Agent: IEEE 3394 Exemplar Agent v0.1.0
+   UMF Socket: /tmp/ieee3394-agent.sock
+   CLI Channel: /tmp/ieee3394-agent-cli.sock
+   Press Ctrl+C to stop
+```
+
+#### Connect a CLI Client
+
+```bash
+# Terminal 2: Connect CLI client
+uv run ieee3394-cli
+
+# Or using Python directly
+python -m ieee3394_agent.cli_client
+```
+
+The CLI client presents a REPL interface:
+```
+╔══════════════════════════════════════════════════════════════╗
+║              IEEE 3394 Exemplar Agent                        ║
+║                   CLI Client                                 ║
+╠══════════════════════════════════════════════════════════════╣
+║  Type /help for commands                                     ║
+║  Type 'exit' to quit                                         ║
+╚══════════════════════════════════════════════════════════════╝
+
+>>> /help
+>>> What is P3394?
+>>> exit
+```
+
+#### Using Management Scripts
 
 ```bash
 # Start daemon in background
@@ -56,21 +92,14 @@ uv run ieee3394-agent
 # Check status
 ./scripts/status-daemon.sh
 
-# Connect client
-uv run ieee3394-agent
+# Connect CLI client
+uv run ieee3394-cli
 
 # Stop daemon
 ./scripts/stop-daemon.sh
 
 # Restart daemon
 ./scripts/restart-daemon.sh
-```
-
-#### Option 3: Direct CLI (Single Process)
-
-```bash
-# Run directly without daemon
-python -m ieee3394_agent.cli
 ```
 
 ## Project Status

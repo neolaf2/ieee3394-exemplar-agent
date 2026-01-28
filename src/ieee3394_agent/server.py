@@ -17,6 +17,7 @@ from .core.umf import P3394Message
 from .core.storage import AgentStorage
 from .memory.kstar import KStarMemory
 from .plugins.hooks import set_kstar_memory
+from .channels.cli import CLIChannelAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -166,11 +167,26 @@ async def run_daemon(
     manifest = storage.get_manifest()
     logger.info(f"Agent Manifest: {manifest.get('agent_id')} v{manifest.get('version')}")
 
-    # Create and start server
-    server = AgentServer(gateway)
+    # Create servers
+    # 1. UMF Server (for direct UMF protocol clients)
+    umf_server = AgentServer(gateway, socket_path="/tmp/ieee3394-agent.sock")
 
+    # 2. CLI Channel Adapter (for CLI clients)
+    cli_channel = CLIChannelAdapter(gateway, socket_path="/tmp/ieee3394-agent-cli.sock")
+
+    print("🚀 IEEE 3394 Agent Host starting...")
+    print(f"   Agent: {gateway.AGENT_NAME} v{gateway.AGENT_VERSION}")
+    print(f"   UMF Socket: /tmp/ieee3394-agent.sock")
+    print(f"   CLI Channel: /tmp/ieee3394-agent-cli.sock")
+    print(f"   Press Ctrl+C to stop")
+
+    # Run both servers concurrently
     try:
-        await server.start()
+        await asyncio.gather(
+            umf_server.start(),
+            cli_channel.start()
+        )
     except KeyboardInterrupt:
         print("\n\n👋 Shutting down agent host...")
-        await server.stop()
+        await umf_server.stop()
+        await cli_channel.stop()
