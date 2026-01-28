@@ -1,7 +1,7 @@
 """
 IEEE 3394 Exemplar Agent - Entry Point
 
-Main entry point for running the agent with CLI or web channels.
+Main entry point for running the agent in daemon mode or as a client.
 """
 
 import asyncio
@@ -10,10 +10,8 @@ import logging
 import os
 import sys
 
-from .core.gateway import AgentGateway
-from .memory.kstar import KStarMemory
-from .channels.cli import CLIChannelAdapter
-from .plugins.hooks import set_kstar_memory
+from .server import run_daemon
+from .client import run_client
 
 # Configure logging
 logging.basicConfig(
@@ -23,10 +21,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def get_api_key() -> str:
+def get_api_key(required: bool = True) -> str:
     """Get Anthropic API key from environment"""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
+    if not api_key and required:
         logger.error("ANTHROPIC_API_KEY environment variable not set")
         print("\n❌ Error: ANTHROPIC_API_KEY environment variable not set")
         print("\nPlease set your API key:")
@@ -43,22 +41,31 @@ async def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Start CLI (default)
+  # Start agent host (daemon mode)
+  python -m ieee3394_agent --daemon
+
+  # Connect as client (default)
   python -m ieee3394_agent
 
-  # Start CLI explicitly
-  python -m ieee3394_agent --channel cli
+  # Custom socket path
+  python -m ieee3394_agent --daemon --socket /tmp/my-agent.sock
+  python -m ieee3394_agent --socket /tmp/my-agent.sock
 
   # Enable debug logging
-  python -m ieee3394_agent --debug
+  python -m ieee3394_agent --daemon --debug
 """
     )
 
     parser.add_argument(
-        '--channel', '-c',
-        choices=['cli'],
-        default='cli',
-        help='Channel to start (default: cli)'
+        '--daemon', '-d',
+        action='store_true',
+        help='Run as daemon (agent host)'
+    )
+
+    parser.add_argument(
+        '--socket', '-s',
+        default='/tmp/ieee3394-agent.sock',
+        help='Unix socket path (default: /tmp/ieee3394-agent.sock)'
     )
 
     parser.add_argument(
@@ -72,23 +79,13 @@ Examples:
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # Get API key
-    api_key = get_api_key()
-
-    # Initialize KSTAR memory
-    logger.info("Initializing KSTAR memory...")
-    kstar = KStarMemory()
-    set_kstar_memory(kstar)
-
-    # Initialize gateway
-    logger.info("Initializing Agent Gateway...")
-    gateway = AgentGateway(kstar_memory=kstar, anthropic_api_key=api_key)
-
-    # Start CLI channel
-    if args.channel == 'cli':
-        logger.info("Starting CLI channel...")
-        cli_channel = CLIChannelAdapter(gateway=gateway)
-        await cli_channel.start()
+    if args.daemon:
+        # Run as daemon (agent host)
+        api_key = get_api_key(required=True)
+        await run_daemon(api_key=api_key, debug=args.debug)
+    else:
+        # Run as client
+        await run_client(socket_path=args.socket)
 
 
 def run():
