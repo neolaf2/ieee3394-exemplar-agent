@@ -63,6 +63,8 @@ from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 import os
 
+from .xapi import xAPIFormatter, LRSWriter
+
 logger = logging.getLogger(__name__)
 
 
