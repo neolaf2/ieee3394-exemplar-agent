@@ -21,29 +21,86 @@ Built on the Claude Agent SDK with:
 
 ## Quick Start
 
+### Installation
+
 ```bash
+# Clone the repository
+git clone https://github.com/neolaf2/ieee3394-exemplar-agent.git
+cd ieee3394-exemplar-agent
+
 # Install dependencies
 uv sync
 
-# Run CLI channel
-uv run python -m ieee3394_agent --channel cli
+# Set API key
+export ANTHROPIC_API_KEY='your-api-key-here'
+```
 
-# Run web channel
-uv run python -m ieee3394_agent --channel web --port 8000
+### Running the Agent
 
-# Run both channels
-uv run python -m ieee3394_agent --channel cli --channel web
+#### Option 1: Daemon + Client (Recommended)
+
+```bash
+# Terminal 1: Start daemon (agent host)
+uv run ieee3394-agent --daemon
+
+# Terminal 2: Connect client
+uv run ieee3394-agent
+```
+
+#### Option 2: Using Management Scripts
+
+```bash
+# Start daemon in background
+./scripts/start-daemon.sh
+
+# Check status
+./scripts/status-daemon.sh
+
+# Connect client
+uv run ieee3394-agent
+
+# Stop daemon
+./scripts/stop-daemon.sh
+
+# Restart daemon
+./scripts/restart-daemon.sh
+```
+
+#### Option 3: Direct CLI (Single Process)
+
+```bash
+# Run directly without daemon
+python -m ieee3394_agent.cli
 ```
 
 ## Project Status
 
-🚧 **In Development** - MVP implementation in progress
+✅ **MVP Complete** (85% overall progress)
 
-Current phase: CLI + Claude SDK Integration MVP
+**Implemented:**
+- ✅ P3394 Universal Message Format (UMF)
+- ✅ Agent Gateway with two-tier routing
+- ✅ KSTAR memory integration
+- ✅ Daemon/client architecture
+- ✅ STM/LTM storage system
+- ✅ xAPI (Experience API) logging
+- ✅ CLI channel
+- ✅ Session management
+- ✅ Multi-client support
+
+**Pending:**
+- ⏳ Web channel (FastAPI + WebSocket)
+- ⏳ Full Claude Agent SDK integration
+- ⏳ MCP server connections
 
 ## Documentation
 
-See [CLAUDE.md](./CLAUDE.md) for complete architecture specification and implementation instructions.
+- **[QUICKSTART.md](./QUICKSTART.md)** - Getting started guide
+- **[DAEMON.md](./DAEMON.md)** - Daemon management (start/stop/restart)
+- **[STORAGE.md](./STORAGE.md)** - Storage architecture (STM/LTM)
+- **[XAPI.md](./XAPI.md)** - xAPI integration guide
+- **[CLAUDE.md](./CLAUDE.md)** - Complete architecture specification
+- **[IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md)** - Current status
 
 ## License
 
