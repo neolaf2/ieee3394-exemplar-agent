@@ -17,6 +17,7 @@ from anthropic import Anthropic, AsyncAnthropic
 from .umf import P3394Message, P3394Content, ContentType, MessageType
 from .session import SessionManager, Session
 from ..memory.kstar import KStarMemory
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +236,32 @@ Remember: You ARE the documentation. Your behavior demonstrates the standard."""
 
         client = self._get_anthropic_client()
 
+        # Generate call ID for logging
+        call_id = str(uuid4())
+
+        # Prepare request for logging
+        request_data = {
+            "model": "claude-opus-4-20250514",
+            "max_tokens": 4096,
+            "system": self._get_system_prompt(),
+            "messages": [
+                {
+                    "role": "user",
+                    "content": context_prompt
+                }
+            ],
+            "timestamp": message.timestamp,
+            "call_id": call_id
+        }
+
+        # Log outbound LLM call (request)
+        if self.memory.storage:
+            self.memory.storage.log_outbound_llm_call(
+                session.id,
+                call_id,
+                request_data
+            )
+
         # Call Claude API
         response = await client.messages.create(
             model="claude-opus-4-20250514",
@@ -253,6 +280,25 @@ Remember: You ARE the documentation. Your behavior demonstrates the standard."""
         for block in response.content:
             if hasattr(block, 'text'):
                 response_text += block.text
+
+        # Log outbound LLM call (response)
+        if self.memory.storage:
+            response_data = {
+                "id": response.id,
+                "model": response.model,
+                "usage": {
+                    "input_tokens": response.usage.input_tokens,
+                    "output_tokens": response.usage.output_tokens
+                },
+                "content": response_text[:500] + "..." if len(response_text) > 500 else response_text,
+                "call_id": call_id
+            }
+            self.memory.storage.log_outbound_llm_call(
+                session.id,
+                call_id,
+                request_data,
+                response_data
+            )
 
         return P3394Message(
             type=MessageType.RESPONSE,

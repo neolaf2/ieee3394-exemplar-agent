@@ -13,9 +13,26 @@ The IEEE 3394 Exemplar Agent uses a structured directory hierarchy that separate
 │   │   └── [session_id]/
 │   │       ├── trace.jsonl      # Session traces (KSTAR)
 │   │       ├── context.json     # Session context
-│   │       └── files/           # Session files
-│   └── client/                   # Client sessions (outbound)
-│       └── [session_id]/
+│   │       ├── files/           # Session files
+│   │       └── outbound/        # Outbound calls during this session
+│   │           ├── llm/         # LLM API calls
+│   │           │   └── [call_id]/
+│   │           │       ├── request.json
+│   │           │       └── response.json
+│   │           ├── mcp/         # MCP server calls
+│   │           │   └── [server_name]/
+│   │           │       └── [call_id]/
+│   │           ├── shell/       # Shell command executions
+│   │           │   └── [command_id]/
+│   │           │       ├── command.txt
+│   │           │       ├── stdout.txt
+│   │           │       └── stderr.txt
+│   │           ├── browser/     # Browser automation
+│   │           │   └── [action_id]/
+│   │           └── adapter/     # Other adapter calls
+│   │               └── [adapter_name]/
+│   └── client/                   # Independent client sessions
+│       └── [session_id]/         # (When agent initiates autonomously)
 │           ├── requests.jsonl   # Outbound requests
 │           └── responses.jsonl  # Received responses
 ├── LTM/                          # Long-Term Memory (persistent)
@@ -48,16 +65,22 @@ The IEEE 3394 Exemplar Agent uses a structured directory hierarchy that separate
 When a client connects, the server creates a session directory under `STM/server/[session_id]/`:
 
 - **trace.jsonl**: KSTAR traces for the session (JSONL format, one trace per line)
-- **context.json**: Session metadata (client_id, created_at, etc.)
+- **context.json**: Session metadata (client_id, created_at, outbound_calls counters)
 - **files/**: Any files uploaded or generated during the session
+- **outbound/**: All outbound calls made during this session
+  - **llm/**: LLM API calls (Anthropic, OpenAI, etc.)
+  - **mcp/**: MCP server tool calls
+  - **shell/**: Shell command executions
+  - **browser/**: Browser automation actions
+  - **adapter/**: Custom adapter calls
 
-### Client Sessions (Outbound)
+**Key Insight**: All outbound calls are nested within the server session that triggered them. This maintains context and makes debugging easier—you can see the full conversation flow including all external service calls.
 
-When the agent connects to external agents (like LLM providers or MCP servers), it creates a client session:
+### Independent Client Sessions
 
-- **requests.jsonl**: Log of all outbound requests
-- **responses.jsonl**: Log of all received responses
-- **context.json**: Target agent info, created_at, etc.
+The `STM/client/` directory is for **autonomous** outbound sessions—when the agent initiates communication independently, not as part of serving an inbound request.
+
+Example: A scheduled task that checks an external API every hour would create an independent client session.
 
 ### Cleanup
 

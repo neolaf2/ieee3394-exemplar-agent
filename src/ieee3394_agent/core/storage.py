@@ -11,9 +11,26 @@ Directory Structure:
 │   │   └── [session_id]/
 │   │       ├── trace.jsonl      # Session traces (KSTAR)
 │   │       ├── context.json     # Session context
-│   │       └── files/           # Session files
-│   └── client/                   # Client sessions (outbound)
-│       └── [session_id]/
+│   │       ├── files/           # Session files
+│   │       └── outbound/        # Outbound calls during this session
+│   │           ├── llm/         # LLM API calls
+│   │           │   └── [call_id]/
+│   │           │       ├── request.json
+│   │           │       └── response.json
+│   │           ├── mcp/         # MCP server calls
+│   │           │   └── [server_name]/
+│   │           │       └── [call_id]/
+│   │           ├── shell/       # Shell command executions
+│   │           │   └── [command_id]/
+│   │           │       ├── command.txt
+│   │           │       ├── stdout.txt
+│   │           │       └── stderr.txt
+│   │           ├── browser/     # Browser automation
+│   │           │   └── [action_id]/
+│   │           └── adapter/     # Other adapter calls
+│   │               └── [adapter_name]/
+│   └── client/                   # Independent client sessions
+│       └── [session_id]/         # (When agent initiates autonomously)
 │           ├── requests.jsonl   # Outbound requests
 │           └── responses.jsonl  # Received responses
 ├── LTM/                          # Long-Term Memory (persistent)
@@ -178,6 +195,14 @@ class AgentStorage:
         session_dir.mkdir(parents=True, exist_ok=True)
         (session_dir / "files").mkdir(exist_ok=True)
 
+        # Create outbound subdirectories
+        outbound_dir = session_dir / "outbound"
+        (outbound_dir / "llm").mkdir(parents=True, exist_ok=True)
+        (outbound_dir / "mcp").mkdir(parents=True, exist_ok=True)
+        (outbound_dir / "shell").mkdir(parents=True, exist_ok=True)
+        (outbound_dir / "browser").mkdir(parents=True, exist_ok=True)
+        (outbound_dir / "adapter").mkdir(parents=True, exist_ok=True)
+
         # Initialize session context
         context_path = session_dir / "context.json"
         if not context_path.exists():
@@ -185,6 +210,13 @@ class AgentStorage:
                 "session_id": session_id,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "client_id": None,
+                "outbound_calls": {
+                    "llm": 0,
+                    "mcp": 0,
+                    "shell": 0,
+                    "browser": 0,
+                    "adapter": 0
+                },
                 "metadata": {}
             }
             context_path.write_text(json.dumps(context, indent=2))
@@ -242,12 +274,141 @@ class AgentStorage:
                 logger.info(f"Cleaned up old session: {session_dir.name}")
 
     # =========================================================================
-    # STM - Client Session Management (Outbound)
+    # STM - Outbound Calls (within Server Session)
+    # =========================================================================
+
+    def log_outbound_llm_call(
+        self,
+        session_id: str,
+        call_id: str,
+        request: Dict[str, Any],
+        response: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Log an LLM API call made during a server session.
+
+        Args:
+            session_id: Server session ID
+            call_id: Unique call identifier
+            request: Request data
+            response: Response data (if available)
+        """
+        session_dir = self.get_server_session_dir(session_id)
+        if not session_dir:
+            raise ValueError(f"Session not found: {session_id}")
+
+        call_dir = session_dir / "outbound" / "llm" / call_id
+        call_dir.mkdir(parents=True, exist_ok=True)
+
+        # Log request
+        (call_dir / "request.json").write_text(json.dumps(request, indent=2))
+
+        # Log response if provided
+        if response:
+            (call_dir / "response.json").write_text(json.dumps(response, indent=2))
+
+        logger.debug(f"Logged LLM call: {session_id}/{call_id}")
+
+    def log_outbound_mcp_call(
+        self,
+        session_id: str,
+        server_name: str,
+        call_id: str,
+        request: Dict[str, Any],
+        response: Optional[Dict[str, Any]] = None
+    ):
+        """Log an MCP server call"""
+        session_dir = self.get_server_session_dir(session_id)
+        if not session_dir:
+            raise ValueError(f"Session not found: {session_id}")
+
+        call_dir = session_dir / "outbound" / "mcp" / server_name / call_id
+        call_dir.mkdir(parents=True, exist_ok=True)
+
+        (call_dir / "request.json").write_text(json.dumps(request, indent=2))
+        if response:
+            (call_dir / "response.json").write_text(json.dumps(response, indent=2))
+
+    def log_outbound_shell_command(
+        self,
+        session_id: str,
+        command_id: str,
+        command: str,
+        stdout: Optional[str] = None,
+        stderr: Optional[str] = None,
+        exit_code: Optional[int] = None
+    ):
+        """Log a shell command execution"""
+        session_dir = self.get_server_session_dir(session_id)
+        if not session_dir:
+            raise ValueError(f"Session not found: {session_id}")
+
+        cmd_dir = session_dir / "outbound" / "shell" / command_id
+        cmd_dir.mkdir(parents=True, exist_ok=True)
+
+        (cmd_dir / "command.txt").write_text(command)
+        if stdout:
+            (cmd_dir / "stdout.txt").write_text(stdout)
+        if stderr:
+            (cmd_dir / "stderr.txt").write_text(stderr)
+        if exit_code is not None:
+            (cmd_dir / "exit_code.txt").write_text(str(exit_code))
+
+    def log_outbound_browser_action(
+        self,
+        session_id: str,
+        action_id: str,
+        action_type: str,
+        parameters: Dict[str, Any],
+        result: Optional[Dict[str, Any]] = None
+    ):
+        """Log a browser automation action"""
+        session_dir = self.get_server_session_dir(session_id)
+        if not session_dir:
+            raise ValueError(f"Session not found: {session_id}")
+
+        action_dir = session_dir / "outbound" / "browser" / action_id
+        action_dir.mkdir(parents=True, exist_ok=True)
+
+        action_data = {
+            "action_type": action_type,
+            "parameters": parameters,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        (action_dir / "action.json").write_text(json.dumps(action_data, indent=2))
+
+        if result:
+            (action_dir / "result.json").write_text(json.dumps(result, indent=2))
+
+    def log_outbound_adapter_call(
+        self,
+        session_id: str,
+        adapter_name: str,
+        call_id: str,
+        data: Dict[str, Any]
+    ):
+        """Log a custom adapter call"""
+        session_dir = self.get_server_session_dir(session_id)
+        if not session_dir:
+            raise ValueError(f"Session not found: {session_id}")
+
+        call_dir = session_dir / "outbound" / "adapter" / adapter_name / call_id
+        call_dir.mkdir(parents=True, exist_ok=True)
+
+        (call_dir / "data.json").write_text(json.dumps(data, indent=2))
+
+    # =========================================================================
+    # STM - Independent Client Sessions (Autonomous Outbound)
     # =========================================================================
 
     def create_client_session(self, session_id: str, target_agent: str) -> Path:
         """
-        Create a new client session directory (for outbound requests).
+        Create an independent client session directory.
+
+        Use this ONLY when the agent autonomously initiates communication
+        with external agents, NOT as part of serving an inbound request.
+
+        For outbound calls within a server session, use log_outbound_* methods.
 
         Args:
             session_id: Unique session identifier
@@ -266,11 +427,12 @@ class AgentStorage:
                 "session_id": session_id,
                 "target_agent": target_agent,
                 "created_at": datetime.now(timezone.utc).isoformat(),
+                "purpose": "autonomous",
                 "metadata": {}
             }
             context_path.write_text(json.dumps(context, indent=2))
 
-        logger.debug(f"Created client session: {session_id} -> {target_agent}")
+        logger.debug(f"Created independent client session: {session_id} -> {target_agent}")
         return session_dir
 
     def append_client_request(self, session_id: str, request: Dict[str, Any]):
