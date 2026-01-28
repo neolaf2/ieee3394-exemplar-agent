@@ -11,10 +11,12 @@ authors = [
 keywords = ["agent", "ai", "ieee", "p3394", "llm"]
 
 dependencies = [
-    "anthropic>=0.39.0",
+    "claude-agent-sdk>=0.1.20",
     "fastapi>=0.109.0",
     "uvicorn>=0.27.0",
     "httpx>=0.26.0",
+    "anyio>=4.0.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
