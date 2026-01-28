@@ -12,6 +12,9 @@ keywords = ["agent", "ai", "ieee", "p3394", "llm"]
 
 dependencies = [
     "anthropic>=0.39.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "httpx>=0.26.0",
 ]
 
 [project.optional-dependencies]

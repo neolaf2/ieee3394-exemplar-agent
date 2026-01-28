@@ -8,15 +8,16 @@ Listens for CLI client connections and routes to the Agent Gateway.
 import asyncio
 import json
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
-from ..core.umf import P3394Message, P3394Content, ContentType, MessageType
+from ..core.umf import P3394Message, P3394Content, ContentType, MessageType, P3394Address
 from ..core.gateway import AgentGateway
+from .base import ChannelAdapter, ChannelCapabilities
 
 logger = logging.getLogger(__name__)
 
 
-class CLIChannelAdapter:
+class CLIChannelAdapter(ChannelAdapter):
     """
     CLI Channel Adapter
 
@@ -40,14 +41,30 @@ class CLIChannelAdapter:
         gateway: AgentGateway,
         socket_path: str = "/tmp/ieee3394-agent-cli.sock"
     ):
-        self.gateway = gateway
-        self.channel_id = "cli"
+        super().__init__(gateway, "cli")
         self.socket_path = socket_path
-        self.is_active = False
         self.server: Optional[asyncio.Server] = None
 
         # Track active CLI client connections
         self.clients: Dict[str, asyncio.StreamWriter] = {}
+
+    @property
+    def capabilities(self) -> ChannelCapabilities:
+        """CLI channel capabilities"""
+        return ChannelCapabilities(
+            content_types=[ContentType.TEXT, ContentType.MARKDOWN],
+            max_message_size=100 * 1024,  # 100 KB
+            max_attachment_size=0,  # No attachments
+            supports_streaming=False,
+            supports_attachments=False,
+            supports_images=False,
+            supports_folders=False,
+            supports_multipart=False,
+            supports_markdown=True,  # Readable as text
+            supports_html=False,
+            max_concurrent_connections=10,
+            rate_limit_per_minute=60
+        )
 
     async def start(self):
         """Start the CLI channel adapter"""
@@ -199,11 +216,14 @@ class CLIChannelAdapter:
         CLI format:
             {"type": "response", "text": "...", "message_id": "..."}
         """
-        # Extract text from content blocks
+        # Adapt content to CLI capabilities (text/markdown only)
+        adapted_message = self.adapt_content(umf_message)
+
+        # Extract text from adapted content blocks
         text_parts = []
         json_parts = []
 
-        for content in umf_message.content:
+        for content in adapted_message.content:
             if content.type == ContentType.TEXT:
                 text_parts.append(content.data)
             elif content.type == ContentType.MARKDOWN:
@@ -212,9 +232,9 @@ class CLIChannelAdapter:
                 json_parts.append(content.data)
 
         cli_response = {
-            "type": "response" if umf_message.type == MessageType.RESPONSE else "error",
-            "message_id": umf_message.id,
-            "session_id": umf_message.session_id
+            "type": "response" if adapted_message.type == MessageType.RESPONSE else "error",
+            "message_id": adapted_message.id,
+            "session_id": adapted_message.session_id
         }
 
         if text_parts:
@@ -223,7 +243,30 @@ class CLIChannelAdapter:
         if json_parts:
             cli_response["data"] = json_parts
 
+        # Notify about dropped content
+        if "dropped_content" in adapted_message.metadata:
+            dropped = adapted_message.metadata["dropped_content"]
+            cli_response["dropped_content"] = dropped
+            cli_response["text"] = cli_response.get("text", "") + f"\n\n⚠️  {len(dropped)} items not fully supported in CLI"
+
         return cli_response
+
+    async def send_to_client(self, reply_to: Dict[str, Any], message: P3394Message):
+        """
+        Send a message back to a CLI client.
+
+        Args:
+            reply_to: {"session_id": "..."}
+            message: P3394 UMF message to send
+        """
+        session_id = reply_to.get("session_id")
+        if not session_id or session_id not in self.clients:
+            logger.warning(f"Cannot send to CLI client: session {session_id} not found")
+            return
+
+        writer = self.clients[session_id]
+        cli_message = self._umf_to_cli(message)
+        await self._send_cli_message(writer, cli_message)
 
     async def _send_cli_message(self, writer: asyncio.StreamWriter, message: dict):
         """Send a message to CLI client"""

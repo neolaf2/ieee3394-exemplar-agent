@@ -18,6 +18,8 @@ from .core.storage import AgentStorage
 from .memory.kstar import KStarMemory
 from .plugins.hooks import set_kstar_memory
 from .channels.cli import CLIChannelAdapter
+from .channels.anthropic_api_server import AnthropicAPIServerAdapter
+from .channels.p3394_server import P3394ServerAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +137,12 @@ class AgentServer:
 async def run_daemon(
     api_key: Optional[str] = None,
     debug: bool = False,
-    agent_name: str = "ieee3394-exemplar"
+    agent_name: str = "ieee3394-exemplar",
+    enable_anthropic_api: bool = False,
+    anthropic_api_port: int = 8100,
+    anthropic_api_keys: Optional[set] = None,
+    enable_p3394_server: bool = True,
+    p3394_server_port: int = 8101
 ):
     """Run the agent in daemon mode"""
     if debug:
@@ -168,25 +175,59 @@ async def run_daemon(
     logger.info(f"Agent Manifest: {manifest.get('agent_id')} v{manifest.get('version')}")
 
     # Create servers
+    servers = []
+
     # 1. UMF Server (for direct UMF protocol clients)
     umf_server = AgentServer(gateway, socket_path="/tmp/ieee3394-agent.sock")
+    servers.append(umf_server.start())
 
     # 2. CLI Channel Adapter (for CLI clients)
     cli_channel = CLIChannelAdapter(gateway, socket_path="/tmp/ieee3394-agent-cli.sock")
+    servers.append(cli_channel.start())
 
     print("🚀 IEEE 3394 Agent Host starting...")
     print(f"   Agent: {gateway.AGENT_NAME} v{gateway.AGENT_VERSION}")
     print(f"   UMF Socket: /tmp/ieee3394-agent.sock")
     print(f"   CLI Channel: /tmp/ieee3394-agent-cli.sock")
+
+    # 3. Anthropic API Server Adapter (optional)
+    anthropic_server = None
+    if enable_anthropic_api:
+        anthropic_server = AnthropicAPIServerAdapter(
+            gateway,
+            host="0.0.0.0",
+            port=anthropic_api_port,
+            api_keys=anthropic_api_keys
+        )
+        servers.append(anthropic_server.start())
+        print(f"   Anthropic API: http://0.0.0.0:{anthropic_api_port}")
+        if anthropic_api_keys:
+            print(f"   API Keys: {len(anthropic_api_keys)} configured")
+        else:
+            print(f"   API Keys: None (open for testing)")
+
+    # 4. P3394 Server Adapter (for P3394 agent-to-agent)
+    p3394_server = None
+    if enable_p3394_server:
+        p3394_server = P3394ServerAdapter(
+            gateway,
+            host="0.0.0.0",
+            port=p3394_server_port
+        )
+        servers.append(p3394_server.start())
+        print(f"   P3394 Agent: http://0.0.0.0:{p3394_server_port}")
+        print(f"   P3394 Address: p3394://{gateway.AGENT_ID}")
+
     print(f"   Press Ctrl+C to stop")
 
-    # Run both servers concurrently
+    # Run all servers concurrently
     try:
-        await asyncio.gather(
-            umf_server.start(),
-            cli_channel.start()
-        )
+        await asyncio.gather(*servers)
     except KeyboardInterrupt:
         print("\n\n👋 Shutting down agent host...")
         await umf_server.stop()
         await cli_channel.stop()
+        if anthropic_server:
+            await anthropic_server.stop()
+        if p3394_server:
+            await p3394_server.stop()

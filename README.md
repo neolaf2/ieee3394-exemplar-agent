@@ -16,6 +16,9 @@ This agent serves dual purposes:
 Built on the Claude Agent SDK with:
 - Two-tier message routing (symbolic commands + LLM intelligence)
 - Channel adapters transforming protocols to/from P3394 UMF
+  - **CLI Channel**: Terminal interface
+  - **Anthropic API Channel**: Compatible with Anthropic SDK clients
+  - **Web Channel** (coming soon): HTTP/WebSocket interface
 - Hook-based extensibility for compliance and logging
 - Agent skills and subagents for specialized capabilities
 
@@ -42,12 +45,16 @@ export ANTHROPIC_API_KEY='your-api-key-here'
 ```bash
 # Terminal 1: Start daemon with all channels
 uv run ieee3394-agent --daemon
+
+# With Anthropic API channel (makes agent accessible via Anthropic API)
+uv run ieee3394-agent --daemon --anthropic-api --api-port 8100
 ```
 
 This starts:
 - Agent Gateway (core routing engine)
 - CLI Channel Adapter (for CLI clients)
 - UMF Server (for direct UMF protocol)
+- Anthropic API Server Adapter (optional, if --anthropic-api flag used)
 
 You'll see:
 ```
@@ -55,6 +62,7 @@ You'll see:
    Agent: IEEE 3394 Exemplar Agent v0.1.0
    UMF Socket: /tmp/ieee3394-agent.sock
    CLI Channel: /tmp/ieee3394-agent-cli.sock
+   Anthropic API: http://0.0.0.0:8100 (if enabled)
    Press Ctrl+C to stop
 ```
 
@@ -82,6 +90,44 @@ The CLI client presents a REPL interface:
 >>> What is P3394?
 >>> exit
 ```
+
+#### Connect via Anthropic API
+
+```python
+# Python: Use Anthropic SDK
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="test-key",  # Agent-issued key (or blank for testing)
+    base_url="http://localhost:8100"  # Your agent's endpoint
+)
+
+message = client.messages.create(
+    model="ieee-3394-agent",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "What is P3394?"}
+    ]
+)
+
+print(message.content[0].text)
+```
+
+```bash
+# curl: Direct API call
+curl -X POST http://localhost:8100/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: test-key" \
+  -d '{
+    "model": "ieee-3394-agent",
+    "max_tokens": 1024,
+    "messages": [
+      {"role": "user", "content": "Hello!"}
+    ]
+  }'
+```
+
+See **[ANTHROPIC_API.md](./ANTHROPIC_API.md)** for complete Anthropic API adapter documentation.
 
 #### Using Management Scripts
 
@@ -126,6 +172,8 @@ uv run ieee3394-cli
 
 - **[QUICKSTART.md](./QUICKSTART.md)** - Getting started guide
 - **[DAEMON.md](./DAEMON.md)** - Daemon management (start/stop/restart)
+- **[ANTHROPIC_API.md](./ANTHROPIC_API.md)** - Anthropic API channel adapters
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Channel adapter architecture
 - **[STORAGE.md](./STORAGE.md)** - Storage architecture (STM/LTM)
 - **[XAPI.md](./XAPI.md)** - xAPI integration guide
 - **[CLAUDE.md](./CLAUDE.md)** - Complete architecture specification

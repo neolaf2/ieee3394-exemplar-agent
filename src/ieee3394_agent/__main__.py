@@ -44,6 +44,9 @@ Examples:
   # Start agent host (daemon mode)
   python -m ieee3394_agent --daemon
 
+  # Start with Anthropic API server adapter
+  python -m ieee3394_agent --daemon --anthropic-api --api-port 8100
+
   # Connect as client (default)
   python -m ieee3394_agent
 
@@ -69,6 +72,46 @@ Examples:
     )
 
     parser.add_argument(
+        '--anthropic-api',
+        action='store_true',
+        help='Enable Anthropic API server adapter (makes agent accessible via Anthropic API)'
+    )
+
+    parser.add_argument(
+        '--api-port',
+        type=int,
+        default=8100,
+        help='Port for Anthropic API server (default: 8100)'
+    )
+
+    parser.add_argument(
+        '--api-keys',
+        type=str,
+        help='Comma-separated list of agent-issued API keys (leave empty for testing)'
+    )
+
+    parser.add_argument(
+        '--p3394-server',
+        action='store_true',
+        default=True,
+        help='Enable P3394 server for agent-to-agent communication (default: enabled)'
+    )
+
+    parser.add_argument(
+        '--no-p3394-server',
+        action='store_false',
+        dest='p3394_server',
+        help='Disable P3394 server'
+    )
+
+    parser.add_argument(
+        '--p3394-port',
+        type=int,
+        default=8101,
+        help='Port for P3394 agent server (default: 8101)'
+    )
+
+    parser.add_argument(
         '--debug',
         action='store_true',
         help='Enable debug logging'
@@ -82,7 +125,21 @@ Examples:
     if args.daemon:
         # Run as daemon (agent host)
         api_key = get_api_key(required=True)
-        await run_daemon(api_key=api_key, debug=args.debug)
+
+        # Parse API keys if provided
+        api_keys = None
+        if args.api_keys:
+            api_keys = set(k.strip() for k in args.api_keys.split(',') if k.strip())
+
+        await run_daemon(
+            api_key=api_key,
+            debug=args.debug,
+            enable_anthropic_api=args.anthropic_api,
+            anthropic_api_port=args.api_port,
+            anthropic_api_keys=api_keys,
+            enable_p3394_server=args.p3394_server,
+            p3394_server_port=args.p3394_port
+        )
     else:
         # Run as client
         await run_client(socket_path=args.socket)
