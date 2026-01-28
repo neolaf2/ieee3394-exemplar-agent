@@ -69,12 +69,19 @@ logger = logging.getLogger(__name__)
 class AgentStorage:
     """Manages agent storage directories and files"""
 
-    def __init__(self, agent_name: str = "ieee3394-exemplar"):
+    def __init__(
+        self,
+        agent_name: str = "ieee3394-exemplar",
+        enable_xapi: bool = True,
+        xapi_mcp_client=None
+    ):
         """
         Initialize agent storage.
 
         Args:
             agent_name: Name of the agent (for directory naming)
+            enable_xapi: Enable xAPI statement logging
+            xapi_mcp_client: Optional MCP client for xAPI LRS
         """
         self.agent_name = agent_name
         self.base_dir = Path.home() / f".P3394_agent_{agent_name}"
@@ -91,6 +98,11 @@ class AgentStorage:
         # LTM subdirectories
         self.ltm_server_dir = self.ltm_dir / "server"
         self.ltm_client_dir = self.ltm_dir / "client"
+
+        # xAPI configuration
+        self.enable_xapi = enable_xapi
+        self.xapi_formatter = xAPIFormatter()
+        self.xapi_mcp_client = xapi_mcp_client
 
         # Initialize structure
         self._initialize_structure()
@@ -220,6 +232,11 @@ class AgentStorage:
                 "metadata": {}
             }
             context_path.write_text(json.dumps(context, indent=2))
+
+        # Initialize xAPI LRS writer for this session
+        if self.enable_xapi:
+            lrs_path = session_dir / "xapi_statements.jsonl"
+            self._get_or_create_lrs_writer(session_id, lrs_path)
 
         logger.debug(f"Created server session: {session_id}")
         return session_dir
@@ -555,6 +572,93 @@ class AgentStorage:
     def get_log_path(self, log_type: str = "server") -> Path:
         """Get path to log file"""
         return self.logs_dir / f"{log_type}.log"
+
+    # =========================================================================
+    # xAPI Statement Logging
+    # =========================================================================
+
+    def _get_or_create_lrs_writer(self, session_id: str, lrs_path: Path) -> LRSWriter:
+        """Get or create LRS writer for a session"""
+        if not hasattr(self, '_lrs_writers'):
+            self._lrs_writers: Dict[str, LRSWriter] = {}
+
+        if session_id not in self._lrs_writers:
+            self._lrs_writers[session_id] = LRSWriter(
+                storage_path=str(lrs_path),
+                mcp_client=self.xapi_mcp_client
+            )
+
+        return self._lrs_writers[session_id]
+
+    async def log_xapi_statement(
+        self,
+        session_id: str,
+        message,  # P3394Message
+        client_id: Optional[str] = None,
+        result: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Log a P3394 message as an xAPI statement.
+
+        Args:
+            session_id: Server session ID
+            message: P3394Message object
+            client_id: Optional client identifier
+            result: Optional result data
+
+        Returns:
+            Statement ID
+        """
+        if not self.enable_xapi:
+            return ""
+
+        session_dir = self.get_server_session_dir(session_id)
+        if not session_dir:
+            session_dir = self.create_server_session(session_id)
+
+        lrs_path = session_dir / "xapi_statements.jsonl"
+        lrs_writer = self._get_or_create_lrs_writer(session_id, lrs_path)
+
+        # Format as xAPI statement
+        statement = self.xapi_formatter.message_to_statement(
+            message=message,
+            session_id=session_id,
+            agent_id=self.agent_name,
+            client_id=client_id,
+            result=result
+        )
+
+        # Write to LRS
+        statement_id = await lrs_writer.write_statement(statement)
+        logger.debug(f"Logged xAPI statement: {statement_id}")
+
+        return statement_id
+
+    async def read_xapi_statements(
+        self,
+        session_id: str,
+        limit: int = 100
+    ) -> list[Dict[str, Any]]:
+        """
+        Read xAPI statements for a session.
+
+        Args:
+            session_id: Server session ID
+            limit: Maximum statements to return
+
+        Returns:
+            List of xAPI statements
+        """
+        session_dir = self.get_server_session_dir(session_id)
+        if not session_dir:
+            return []
+
+        lrs_path = session_dir / "xapi_statements.jsonl"
+        if not lrs_path.exists():
+            return []
+
+        lrs_writer = self._get_or_create_lrs_writer(session_id, lrs_path)
+        return await lrs_writer.read_statements(session_id=session_id, limit=limit)
 
     def __str__(self):
         return f"AgentStorage({self.agent_name}) @ {self.base_dir}"

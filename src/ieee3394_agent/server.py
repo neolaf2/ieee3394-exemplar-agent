@@ -65,8 +65,21 @@ class AgentServer:
                     )
                     logger.debug(f"Session directory: {session_dir}")
 
+                    # Log incoming message as xAPI statement
+                    await self.gateway.memory.storage.log_xapi_statement(
+                        message.session_id,
+                        message
+                    )
+
                 # Handle message
                 response = await self.gateway.handle(message)
+
+                # Log response as xAPI statement
+                if message.session_id and response:
+                    await self.gateway.memory.storage.log_xapi_statement(
+                        message.session_id,
+                        response
+                    )
 
                 # Send response
                 response_data = json.dumps(response.to_dict()).encode('utf-8')
