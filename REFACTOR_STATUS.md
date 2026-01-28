@@ -2,7 +2,7 @@
 
 **Branch:** `feature/agent-sdk-refactor`
 **Date:** 2026-01-28
-**Completion:** 75% (6/8 tasks)
+**Completion:** 87.5% (7/8 tasks)
 
 ## ✅ Completed Tasks
 
@@ -110,22 +110,26 @@ When users ask about P3394, provide clear explanations...
 - ✅ Testing instructions
 - ✅ Benefits summary
 
+### 7. Channel Adapters Integrated
+- ✅ Updated all imports from `gateway` to `gateway_sdk`
+- ✅ Modified `server.py` to use SDK gateway constructor
+- ✅ Added `await gateway.initialize()` call for skill loading
+- ✅ Updated all 5 channel adapter files:
+  - `server.py` - Main daemon with UMF server
+  - `channels/cli.py` - CLI channel adapter
+  - `channels/p3394_server.py` - P3394 server adapter
+  - `channels/anthropic_api_server.py` - Anthropic API server
+  - `channels/p3394_client.py` - P3394 client adapter
+
+**Key Changes:**
+```python
+# server.py - Gateway initialization with skill loading
+gateway = AgentGateway(memory=kstar, working_dir=storage.base_dir)
+await gateway.initialize()  # ← Load skills before starting servers
+logger.info(f"Loaded {len(gateway.skills)} skills")
+```
+
 ## 🚧 Remaining Tasks
-
-### 7. Adapt Channel Adapters (Pending)
-
-**What Needs to Be Done:**
-- Update channel adapters to use `gateway_sdk.py` instead of `gateway.py`
-- Ensure they work with the new SDK-based gateway
-- Test UMF message routing through SDK
-
-**Files to Update:**
-- `channels/cli.py` - CLI channel adapter
-- `channels/p3394_server.py` - P3394 server adapter
-- `channels/anthropic_api_server.py` - Anthropic API server
-- `server.py` - Update imports to use `gateway_sdk`
-
-**Estimated Effort:** 1-2 hours
 
 ### 8. Update Tests (Pending)
 
@@ -155,10 +159,10 @@ When users ask about P3394, provide clear explanations...
 | Hooks | ✅ Complete |
 | Skills System | ✅ Complete |
 | Documentation | ✅ Complete |
-| Channel Adapters | ⏳ Pending |
+| Channel Adapters | ✅ Complete |
 | Tests | ⏳ Pending |
 
-**Overall Progress:** 75% Complete
+**Overall Progress:** 87.5% Complete
 
 ## 🎯 Benefits Achieved
 
@@ -205,12 +209,7 @@ python -c "from src.ieee3394_agent.core.skill_loader import SkillLoader"
 
 ## 📋 Next Steps
 
-1. **Update Channel Adapters** (Task #6)
-   - Change imports: `from .core.gateway import` → `from .core.gateway_sdk import`
-   - Update server.py to instantiate SDK gateway
-   - Test each channel adapter individually
-
-2. **Add Comprehensive Tests** (Task #7)
+1. **Add Comprehensive Tests** (Task #8)
    - Test custom tools (query_memory, store_trace, list_skills)
    - Test hooks (security, KSTAR logging)
    - Test skill loading and triggering

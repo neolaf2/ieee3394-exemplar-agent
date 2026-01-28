@@ -17,6 +17,7 @@ from pathlib import Path
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, HookMatcher
 from .umf import P3394Message, P3394Content, ContentType, MessageType
 from .session import SessionManager, Session
+from .skill_loader import SkillLoader
 from ..memory.kstar import KStarMemory
 from uuid import uuid4
 
@@ -65,13 +66,14 @@ class AgentGateway:
     ):
         self.memory = memory
         self.session_manager = SessionManager()
-        self.working_dir = working_dir or Path.cwd()
+        self.working_dir = working_dir if isinstance(working_dir, Path) else Path(working_dir) if working_dir else Path.cwd()
 
         # Command registry
         self.commands: Dict[str, SymbolicCommand] = {}
         self._register_builtin_commands()
 
-        # Skill registry
+        # Skill loader and registry
+        self.skill_loader = SkillLoader(self.working_dir / ".claude" / "skills")
         self.skills: Dict[str, Any] = {}  # skill_name -> skill definition
         self.skill_triggers: Dict[str, str] = {}  # pattern -> skill_name
 
@@ -81,6 +83,17 @@ class AgentGateway:
         # Claude Agent SDK options (lazy initialized)
         self._sdk_options: Optional[ClaudeAgentOptions] = None
         self._sdk_client: Optional[ClaudeSDKClient] = None
+
+    async def initialize(self):
+        """
+        Initialize async components (load skills).
+        Call this after creating the gateway.
+        """
+        # Load skills from .claude/skills/
+        logger.info("Loading skills from .claude/skills/...")
+        self.skills = await self.skill_loader.load_all_skills()
+        self.skill_triggers = self.skill_loader.get_skill_triggers()
+        logger.info(f"Loaded {len(self.skills)} skills with {len(self.skill_triggers)} triggers")
 
     def get_sdk_options(self) -> ClaudeAgentOptions:
         """

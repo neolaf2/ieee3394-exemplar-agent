@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 import httpx
 
 from ..core.umf import P3394Message, P3394Content, ContentType, MessageType, P3394Address
-from ..core.gateway import AgentGateway
+from ..core.gateway_sdk import AgentGateway
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ import logging
 from typing import Dict, Optional, Any
 
 from ..core.umf import P3394Message, P3394Content, ContentType, MessageType, P3394Address
-from ..core.gateway import AgentGateway
+from ..core.gateway_sdk import AgentGateway
 from .base import ChannelAdapter, ChannelCapabilities
 
 logger = logging.getLogger(__name__)

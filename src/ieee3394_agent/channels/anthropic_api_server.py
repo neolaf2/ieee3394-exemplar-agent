@@ -18,7 +18,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 import uvicorn
 
 from ..core.umf import P3394Message, P3394Content, ContentType, MessageType
-from ..core.gateway import AgentGateway
+from ..core.gateway_sdk import AgentGateway
 
 logger = logging.getLogger(__name__)
 

@@ -12,11 +12,10 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from .core.gateway import AgentGateway
+from .core.gateway_sdk import AgentGateway
 from .core.umf import P3394Message
 from .core.storage import AgentStorage
 from .memory.kstar import KStarMemory
-from .plugins.hooks import set_kstar_memory
 from .channels.cli import CLIChannelAdapter
 from .channels.anthropic_api_server import AnthropicAPIServerAdapter
 from .channels.p3394_server import P3394ServerAdapter
@@ -164,11 +163,14 @@ async def run_daemon(
     # Initialize KSTAR memory with storage
     logger.info("Initializing KSTAR memory...")
     kstar = KStarMemory(storage=storage)
-    set_kstar_memory(kstar)
 
-    # Initialize gateway
-    logger.info("Initializing Agent Gateway...")
-    gateway = AgentGateway(kstar_memory=kstar, anthropic_api_key=api_key)
+    # Initialize gateway (SDK version)
+    logger.info("Initializing Agent Gateway (SDK)...")
+    gateway = AgentGateway(memory=kstar, working_dir=storage.base_dir)
+
+    # Load skills asynchronously
+    await gateway.initialize()
+    logger.info(f"Loaded {len(gateway.skills)} skills")
 
     # Store agent manifest
     manifest = storage.get_manifest()
