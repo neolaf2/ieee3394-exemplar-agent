@@ -1,11 +1,10 @@
 """
-KSTAR Memory Integration (In-Memory MVP)
+KSTAR Memory Integration
 
 KSTAR = Knowledge, Situation, Task, Action, Result
 A universal representation schema for agent memory.
 
-This MVP implementation uses in-memory storage. Can be upgraded
-to SQLite or MCP server later.
+This implementation persists to the agent's STM directories.
 """
 
 from typing import Any, Dict, List, Optional
@@ -20,13 +19,19 @@ class KStarMemory:
     KSTAR Memory for the IEEE 3394 Agent.
 
     Stores:
-    - Traces: Complete K→S→T→A→R episodes
+    - Traces: Complete K→S→T→A→R episodes (persisted to STM)
     - Perceptions: Facts and observations
     - Skills: Learned capabilities
     """
 
-    def __init__(self):
-        """Initialize in-memory KSTAR storage"""
+    def __init__(self, storage=None):
+        """
+        Initialize KSTAR storage.
+
+        Args:
+            storage: AgentStorage instance for persistence
+        """
+        self.storage = storage
         self.traces: List[Dict[str, Any]] = []
         self.perceptions: List[Dict[str, Any]] = []
         self.skills: List[Dict[str, Any]] = []
@@ -50,6 +55,14 @@ class KStarMemory:
             **trace
         }
         self.traces.append(trace_entry)
+
+        # Persist to storage if available
+        if self.storage and trace.get("session_id"):
+            try:
+                self.storage.append_trace(trace["session_id"], trace_entry)
+            except Exception as e:
+                logger.warning(f"Failed to persist trace to storage: {e}")
+
         logger.debug(f"Stored trace {trace_id}")
         return trace_id
 

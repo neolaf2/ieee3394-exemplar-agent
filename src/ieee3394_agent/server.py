@@ -14,6 +14,7 @@ from typing import Optional
 
 from .core.gateway import AgentGateway
 from .core.umf import P3394Message
+from .core.storage import AgentStorage
 from .memory.kstar import KStarMemory
 from .plugins.hooks import set_kstar_memory
 
@@ -56,6 +57,13 @@ class AgentServer:
 
                 # Convert to P3394Message
                 message = P3394Message.from_dict(message_dict)
+
+                # Ensure session directory exists
+                if message.session_id:
+                    session_dir = self.gateway.memory.storage.create_server_session(
+                        message.session_id
+                    )
+                    logger.debug(f"Session directory: {session_dir}")
 
                 # Handle message
                 response = await self.gateway.handle(message)
@@ -110,18 +118,40 @@ class AgentServer:
         logger.info("Agent server stopped")
 
 
-async def run_daemon(api_key: Optional[str] = None, debug: bool = False):
+async def run_daemon(
+    api_key: Optional[str] = None,
+    debug: bool = False,
+    agent_name: str = "ieee3394-exemplar"
+):
     """Run the agent in daemon mode"""
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # Initialize
+    # Initialize storage
+    logger.info("Initializing agent storage...")
+    storage = AgentStorage(agent_name=agent_name)
+    logger.info(f"Storage initialized at: {storage.base_dir}")
+
+    # Configure logging to storage directory
+    log_path = storage.get_log_path("server")
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setFormatter(
+        logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    )
+    logging.getLogger().addHandler(file_handler)
+
+    # Initialize KSTAR memory with storage
     logger.info("Initializing KSTAR memory...")
-    kstar = KStarMemory()
+    kstar = KStarMemory(storage=storage)
     set_kstar_memory(kstar)
 
+    # Initialize gateway
     logger.info("Initializing Agent Gateway...")
     gateway = AgentGateway(kstar_memory=kstar, anthropic_api_key=api_key)
+
+    # Store agent manifest
+    manifest = storage.get_manifest()
+    logger.info(f"Agent Manifest: {manifest.get('agent_id')} v{manifest.get('version')}")
 
     # Create and start server
     server = AgentServer(gateway)
