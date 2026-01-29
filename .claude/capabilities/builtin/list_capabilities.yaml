@@ -1,0 +1,51 @@
+capability_id: cap.list_capabilities
+name: List Capabilities
+version: 1.0.0
+description: List and query agent capabilities with filtering support
+kind: atomic
+
+execution:
+  substrate: symbolic
+  runtime: python
+  entrypoint: ieee3394_agent.capabilities.symbolic.list_capabilities:handle_list_capabilities
+
+invocation:
+  modes:
+    - command
+  command_aliases:
+    - /listCapabilities
+    - /capabilities
+    - /cap
+    # Backward compatibility aliases:
+    - /listSkills
+    - /listCommands
+    - /listSubAgents
+    - /listChannels
+
+exposure:
+  scope: human
+  channels: ["*"]
+
+permissions:
+  granted_by_default: true
+  danger_level: low
+
+status:
+  enabled: true
+  mutable: false  # Core capability - immutable
+  signed: false
+
+metadata:
+  usage: |
+    /listCapabilities [?filter=value]
+
+    Filters:
+      ?kind=atomic|composite|proxy|template
+      ?substrate=symbolic|llm|shell|agent|external_service|transport
+      ?invocation=command|message|direct|event|ui_action
+
+    Examples:
+      /listCapabilities              - List all capabilities
+      /listCapabilities?kind=composite  - List skills only
+      /listCapabilities?substrate=symbolic  - List commands only
+      /listCapabilities?substrate=transport  - List channels only

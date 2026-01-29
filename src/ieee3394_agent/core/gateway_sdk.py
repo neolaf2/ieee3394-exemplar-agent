@@ -19,6 +19,8 @@ from .umf import P3394Message, P3394Content, ContentType, MessageType
 from .session import SessionManager, Session
 from .skill_loader import SkillLoader
 from ..memory.kstar import KStarMemory
+from .capability_registry import CapabilityRegistry
+from .capability_engine import CapabilityInvocationEngine
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -68,11 +70,20 @@ class AgentGateway:
         self.session_manager = SessionManager()
         self.working_dir = working_dir if isinstance(working_dir, Path) else Path(working_dir) if working_dir else Path.cwd()
 
-        # Command registry
+        # NEW: Unified capability system
+        self.capability_registry = CapabilityRegistry(
+            persistence_path=self.working_dir / ".claude" / "capabilities.json"
+        )
+        self.capability_engine = CapabilityInvocationEngine(
+            registry=self.capability_registry,
+            gateway=self
+        )
+
+        # LEGACY: Command registry (will be migrated to capabilities)
         self.commands: Dict[str, SymbolicCommand] = {}
         self._register_builtin_commands()
 
-        # Skill loader and registry
+        # LEGACY: Skill loader and registry (will be migrated to capabilities)
         self.skill_loader = SkillLoader(self.working_dir / ".claude" / "skills")
         self.skills: Dict[str, Any] = {}  # skill_name -> skill definition
         self.skill_triggers: Dict[str, str] = {}  # pattern -> skill_name
@@ -86,7 +97,7 @@ class AgentGateway:
 
     async def initialize(self):
         """
-        Initialize async components (load skills).
+        Initialize async components (load skills, migrate to capabilities).
         Call this after creating the gateway.
         """
         # Load skills from .claude/skills/
@@ -94,6 +105,18 @@ class AgentGateway:
         self.skills = await self.skill_loader.load_all_skills()
         self.skill_triggers = self.skill_loader.get_skill_triggers()
         logger.info(f"Loaded {len(self.skills)} skills with {len(self.skill_triggers)} triggers")
+
+        # NEW: Migrate legacy components to capability registry
+        logger.info("Migrating legacy components to capability registry...")
+        await self._migrate_to_capabilities()
+
+        # Load built-in capabilities from YAML descriptors
+        builtin_caps_dir = self.working_dir / ".claude" / "capabilities" / "builtin"
+        if builtin_caps_dir.exists():
+            count = self.capability_registry.load_from_directory(builtin_caps_dir)
+            logger.info(f"Loaded {count} built-in capabilities from {builtin_caps_dir}")
+
+        logger.info(f"Capability registry initialized with {self.capability_registry.count()} capabilities")
 
     def get_sdk_options(self) -> ClaudeAgentOptions:
         """
@@ -208,52 +231,79 @@ When responding:
         self.skills[skill_name] = skill_definition
         logger.info(f"Registered skill: {skill_name}")
 
+    async def _migrate_to_capabilities(self):
+        """Migrate legacy components (commands, skills, channels) to capability registry"""
+        from ..migrations.legacy_adapter import migrate_gateway_components
+
+        count = migrate_gateway_components(self)
+        logger.info(f"Migrated {count} legacy components to capability registry")
+
+        # Log registry state for debugging
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"\n{self.capability_registry.dump_registry()}")
+
     # =========================================================================
     # MESSAGE ROUTING
     # =========================================================================
 
-    async def route(self, message: P3394Message) -> MessageRoute:
-        """Determine how to route an incoming message"""
+    async def route(self, message: P3394Message) -> Optional[str]:
+        """
+        Determine how to route an incoming message.
 
+        Returns capability_id if a capability should handle it,
+        or None for LLM fallback.
+        """
         # Extract text content for routing decisions
         text = self._extract_text(message)
 
-        # Check for symbolic command
+        # NEW: Check capability registry first
+        # Check for command (starts with / or --)
+        if text.startswith("/") or text.startswith("--"):
+            cmd_text = text.split()[0]
+            capability = self.capability_registry.find_by_command(cmd_text)
+            if capability:
+                logger.debug(f"Routed to capability: {capability.capability_id}")
+                return capability.capability_id
+
+        # Check for message trigger
+        capability = self.capability_registry.find_by_trigger(text)
+        if capability:
+            logger.debug(f"Routed to capability: {capability.capability_id} (trigger match)")
+            return capability.capability_id
+
+        # FALLBACK: Check legacy command registry
         if text.startswith("/"):
             cmd_name = text.split()[0]
             if cmd_name in self.commands:
-                return MessageRoute.SYMBOLIC
+                # Find the migrated capability
+                cap_id = f"legacy.command.{cmd_name.lstrip('/').replace('-', '_')}"
+                return cap_id
 
-        # Check for skill triggers
-        for pattern, skill_name in self.skill_triggers.items():
-            if pattern in text.lower():
-                return MessageRoute.SKILL
-
-        # Default: route to LLM via SDK
-        return MessageRoute.LLM
+        # No matching capability - will use LLM
+        return None
 
     async def handle(self, message: P3394Message) -> P3394Message:
         """
         Main entry point for all messages.
 
         This is the core dispatch loop:
-        1. Route the message
-        2. Dispatch to appropriate handler
+        1. Route the message (get capability_id or None)
+        2. Invoke via capability engine or fall back to LLM
         3. Return response
         """
         session = await self._get_or_create_session(message)
-        route = await self.route(message)
+        capability_id = await self.route(message)
 
-        logger.info(f"Routing message {message.id} via {route.value}")
+        logger.info(f"Routing message {message.id}: capability={capability_id or 'LLM fallback'}")
 
         try:
-            if route == MessageRoute.SYMBOLIC:
-                response = await self._handle_symbolic(message, session)
-            elif route == MessageRoute.SKILL:
-                response = await self._handle_skill(message, session)
-            elif route == MessageRoute.SUBAGENT:
-                response = await self._handle_subagent(message, session)
+            if capability_id:
+                # NEW: Route via capability engine
+                response = await self.capability_engine.invoke(
+                    capability_id, message, session
+                )
             else:
+                # FALLBACK: Route to LLM
                 response = await self._handle_llm(message, session)
 
             return response
