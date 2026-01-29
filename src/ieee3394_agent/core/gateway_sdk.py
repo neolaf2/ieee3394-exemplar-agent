@@ -431,7 +431,7 @@ Available subagents:
     # SYMBOLIC COMMAND HANDLERS
     # =========================================================================
 
-    async def _cmd_help(self, message: P3394Message, session: Session) -> P3394Message:
+    async def _cmd_help(self, message: P3394Message, session: Session, **kwargs) -> P3394Message:
         """Handle /help command"""
         help_text = f"""# {self.AGENT_NAME} v{self.AGENT_VERSION}
 
@@ -460,7 +460,7 @@ Just send a message or use a command to get started!
 """
         return P3394Message.text(help_text, reply_to=message.id, session_id=session.id)
 
-    async def _cmd_about(self, message: P3394Message, session: Session) -> P3394Message:
+    async def _cmd_about(self, message: P3394Message, session: Session, **kwargs) -> P3394Message:
         """Handle /about command"""
         about_text = f"""# About {self.AGENT_NAME}
 
@@ -494,7 +494,7 @@ This agent serves as the **reference implementation** of P3394, demonstrating:
 """
         return P3394Message.text(about_text, reply_to=message.id, session_id=session.id)
 
-    async def _cmd_status(self, message: P3394Message, session: Session) -> P3394Message:
+    async def _cmd_status(self, message: P3394Message, session: Session, **kwargs) -> P3394Message:
         """Handle /status command"""
         memory_stats = await self.memory.get_stats() if self.memory else {}
 
@@ -524,7 +524,7 @@ This agent serves as the **reference implementation** of P3394, demonstrating:
 """
         return P3394Message.text(status_text, reply_to=message.id, session_id=session.id)
 
-    async def _cmd_version(self, message: P3394Message, session: Session) -> P3394Message:
+    async def _cmd_version(self, message: P3394Message, session: Session, **kwargs) -> P3394Message:
         """Handle /version command"""
         return P3394Message.text(
             f"{self.AGENT_NAME} v{self.AGENT_VERSION}",
@@ -532,7 +532,7 @@ This agent serves as the **reference implementation** of P3394, demonstrating:
             session_id=session.id
         )
 
-    async def _cmd_list_skills(self, message: P3394Message, session: Session) -> P3394Message:
+    async def _cmd_list_skills(self, message: P3394Message, session: Session, **kwargs) -> P3394Message:
         """Handle /listSkills command"""
         if not self.skills:
             skills_text = "# Skills\n\nNo skills loaded yet. Skills can be added to `.claude/skills/` directory."
