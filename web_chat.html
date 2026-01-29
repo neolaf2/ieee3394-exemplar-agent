@@ -263,6 +263,47 @@
             overflow-y: hidden;
         }
 
+        /* File download buttons */
+        .file-attachment {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            margin: 8px 0;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+
+        .file-attachment:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .file-icon {
+            font-size: 18px;
+        }
+
+        .file-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .file-name {
+            font-weight: 600;
+        }
+
+        .file-size {
+            font-size: 11px;
+            opacity: 0.9;
+        }
+
         .message-time {
             font-size: 11px;
             color: #94a3b8;
@@ -525,7 +566,153 @@
             return tempDiv.innerHTML;
         }
 
-        function addMessage(role, content, rendered = false) {
+        /**
+         * Create a download button for a file attachment
+         */
+        function createFileDownloadButton(fileInfo) {
+            const fileAttachment = document.createElement('a');
+            fileAttachment.className = 'file-attachment';
+            fileAttachment.href = '#';
+            fileAttachment.onclick = (e) => {
+                e.preventDefault();
+                downloadFile(fileInfo);
+            };
+
+            // File icon based on type
+            const icon = document.createElement('span');
+            icon.className = 'file-icon';
+            icon.textContent = getFileIcon(fileInfo.mime_type || fileInfo.filename);
+            fileAttachment.appendChild(icon);
+
+            // File info
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'file-info';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'file-name';
+            nameSpan.textContent = fileInfo.filename || 'download';
+            infoDiv.appendChild(nameSpan);
+
+            if (fileInfo.size) {
+                const sizeSpan = document.createElement('span');
+                sizeSpan.className = 'file-size';
+                sizeSpan.textContent = formatFileSize(fileInfo.size);
+                infoDiv.appendChild(sizeSpan);
+            }
+
+            fileAttachment.appendChild(infoDiv);
+
+            return fileAttachment;
+        }
+
+        /**
+         * Get appropriate icon for file type
+         */
+        function getFileIcon(mimeOrFilename) {
+            const mime = mimeOrFilename || '';
+            const filename = mimeOrFilename || '';
+
+            if (mime.includes('pdf') || filename.endsWith('.pdf')) return '📄';
+            if (mime.includes('word') || filename.endsWith('.docx') || filename.endsWith('.doc')) return '📝';
+            if (mime.includes('sheet') || filename.endsWith('.xlsx') || filename.endsWith('.xls')) return '📊';
+            if (mime.includes('presentation') || filename.endsWith('.pptx') || filename.endsWith('.ppt')) return '📊';
+            if (mime.includes('image') || /\.(jpg|jpeg|png|gif|svg)$/i.test(filename)) return '🖼️';
+            if (mime.includes('zip') || mime.includes('compressed') || filename.endsWith('.zip')) return '📦';
+            if (mime.includes('text') || filename.endsWith('.txt') || filename.endsWith('.md')) return '📃';
+            return '📎';
+        }
+
+        /**
+         * Format file size in human-readable format
+         */
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        /**
+         * Download a file
+         */
+        async function downloadFile(fileInfo) {
+            try {
+                // If file has a URL, download from there
+                if (fileInfo.url) {
+                    const link = document.createElement('a');
+                    link.href = fileInfo.url;
+                    link.download = fileInfo.filename || 'download';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+                // If file has base64 data, create blob and download
+                else if (fileInfo.data) {
+                    const byteCharacters = atob(fileInfo.data);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: fileInfo.mime_type || 'application/octet-stream' });
+
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = fileInfo.filename || 'download';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                }
+                // If file has file_id, fetch from agent
+                else if (fileInfo.file_id) {
+                    const response = await fetch(`${API_BASE_URL}/files/${fileInfo.file_id}`);
+                    if (!response.ok) throw new Error('Failed to download file');
+
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = fileInfo.filename || 'download';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                }
+            } catch (error) {
+                console.error('Download error:', error);
+                showError(`Failed to download file: ${error.message}`);
+            }
+        }
+
+        /**
+         * Extract file attachments from agent response
+         */
+        function extractFileAttachments(content) {
+            const files = [];
+
+            // Check if content is an array of content blocks (P3394 UMF format)
+            if (Array.isArray(content)) {
+                for (const block of content) {
+                    if (block.type === 'file' || block.type === 'binary') {
+                        files.push({
+                            filename: block.metadata?.filename || block.data?.filename || 'download',
+                            size: block.metadata?.size || block.data?.size,
+                            mime_type: block.mime_type || block.data?.mime_type,
+                            data: block.data?.data,
+                            url: block.data?.url,
+                            file_id: block.data?.file_id
+                        });
+                    }
+                }
+            }
+
+            return files;
+        }
+
+        function addMessage(role, content, rendered = false, files = []) {
             // Remove welcome message if it exists
             const welcomeMsg = chatMessages.querySelector('.welcome-message');
             if (welcomeMsg) {
@@ -547,11 +734,28 @@
                 contentDiv.textContent = content;
             }
 
+            messageDiv.appendChild(contentDiv);
+
+            // Add file download buttons if any files are attached
+            if (files && files.length > 0) {
+                const filesContainer = document.createElement('div');
+                filesContainer.style.marginTop = '8px';
+                filesContainer.style.display = 'flex';
+                filesContainer.style.flexDirection = 'column';
+                filesContainer.style.gap = '8px';
+
+                for (const file of files) {
+                    const downloadButton = createFileDownloadButton(file);
+                    filesContainer.appendChild(downloadButton);
+                }
+
+                messageDiv.appendChild(filesContainer);
+            }
+
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
             timeDiv.textContent = new Date().toLocaleTimeString();
 
-            messageDiv.appendChild(contentDiv);
             messageDiv.appendChild(timeDiv);
 
             chatMessages.appendChild(messageDiv);
@@ -638,16 +842,27 @@
 
                 const data = await response.json();
 
-                // Extract text from response
+                // Extract text and files from response
                 let responseText = '';
+                const files = extractFileAttachments(data.content);
+
                 if (data.content && data.content.length > 0) {
-                    responseText = data.content[0].text || 'No response content';
+                    // Concatenate all text content blocks
+                    for (const block of data.content) {
+                        if (block.type === 'text' && block.text) {
+                            responseText += block.text;
+                        }
+                    }
+
+                    if (!responseText) {
+                        responseText = 'No text content in response';
+                    }
                 } else {
                     responseText = 'Empty response from agent';
                 }
 
-                // Add assistant message with markdown rendering
-                addMessage('assistant', responseText, true);
+                // Add assistant message with markdown rendering and file attachments
+                addMessage('assistant', responseText, true, files);
 
             } catch (error) {
                 hideTypingIndicator();

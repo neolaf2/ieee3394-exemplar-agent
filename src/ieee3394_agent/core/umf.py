@@ -27,6 +27,7 @@ class ContentType(str, Enum):
     MARKDOWN = "markdown"
     HTML = "html"
     BINARY = "binary"
+    FILE = "file"  # Document/file attachment with download support
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
 
