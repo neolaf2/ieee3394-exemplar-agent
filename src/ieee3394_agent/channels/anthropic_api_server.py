@@ -159,6 +159,24 @@ class AnthropicAPIServerAdapter:
                 "version": self.gateway.AGENT_VERSION
             }
 
+        @self.app.get("/chatUI")
+        async def serve_chat_ui():
+            """Serve web chat interface"""
+            from pathlib import Path
+            from fastapi.responses import HTMLResponse
+
+            # Find web_chat.html in project root
+            project_root = Path(__file__).parent.parent.parent.parent
+            chat_html_path = project_root / "web_chat.html"
+
+            if not chat_html_path.exists():
+                raise HTTPException(status_code=404, detail="Web chat interface not found")
+
+            with open(chat_html_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+
+            return HTMLResponse(content=html_content)
+
     async def _handle_request(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """Handle non-streaming Anthropic API request"""
 
