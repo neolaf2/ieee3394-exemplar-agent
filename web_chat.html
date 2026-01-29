@@ -572,11 +572,11 @@
         function createFileDownloadButton(fileInfo) {
             const fileAttachment = document.createElement('a');
             fileAttachment.className = 'file-attachment';
-            fileAttachment.href = '#';
-            fileAttachment.onclick = (e) => {
-                e.preventDefault();
-                downloadFile(fileInfo);
-            };
+
+            // Set up native browser download
+            fileAttachment.href = fileInfo.url || fileInfo.path || '#';
+            fileAttachment.download = fileInfo.filename || 'download';
+            fileAttachment.target = '_blank';  // Open in new tab as fallback
 
             // File icon based on type
             const icon = document.createElement('span');
@@ -634,60 +634,6 @@
         }
 
         /**
-         * Download a file
-         */
-        async function downloadFile(fileInfo) {
-            try {
-                // If file has a URL, download from there
-                if (fileInfo.url) {
-                    const link = document.createElement('a');
-                    link.href = fileInfo.url;
-                    link.download = fileInfo.filename || 'download';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                }
-                // If file has base64 data, create blob and download
-                else if (fileInfo.data) {
-                    const byteCharacters = atob(fileInfo.data);
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                        byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    const blob = new Blob([byteArray], { type: fileInfo.mime_type || 'application/octet-stream' });
-
-                    const url = window.URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = fileInfo.filename || 'download';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    window.URL.revokeObjectURL(url);
-                }
-                // If file has file_id, fetch from agent
-                else if (fileInfo.file_id) {
-                    const response = await fetch(`${API_BASE_URL}/files/${fileInfo.file_id}`);
-                    if (!response.ok) throw new Error('Failed to download file');
-
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = fileInfo.filename || 'download';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    window.URL.revokeObjectURL(url);
-                }
-            } catch (error) {
-                console.error('Download error:', error);
-                showError(`Failed to download file: ${error.message}`);
-            }
-        }
-
-        /**
          * Extract file attachments from agent response
          */
         function extractFileAttachments(content) {
@@ -697,14 +643,18 @@
             if (Array.isArray(content)) {
                 for (const block of content) {
                     if (block.type === 'file' || block.type === 'binary') {
-                        files.push({
+                        // Extract file info - agent must provide url or path
+                        const fileInfo = {
                             filename: block.metadata?.filename || block.data?.filename || 'download',
                             size: block.metadata?.size || block.data?.size,
                             mime_type: block.mime_type || block.data?.mime_type,
-                            data: block.data?.data,
-                            url: block.data?.url,
-                            file_id: block.data?.file_id
-                        });
+                            url: block.data?.url || block.data?.path || block.url || block.path
+                        };
+
+                        // Only add if we have a valid URL/path for browser download
+                        if (fileInfo.url) {
+                            files.push(fileInfo);
+                        }
                     }
                 }
             }
