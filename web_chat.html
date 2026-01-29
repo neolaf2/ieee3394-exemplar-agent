@@ -4,6 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IEEE 3394 Agent - Web Chat</title>
+
+    <!-- Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+
+    <!-- LaTeX math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Code syntax highlighting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/es/highlight.min.js"></script>
+
     <style>
         * {
             margin: 0;
@@ -26,7 +39,7 @@
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             width: 100%;
-            max-width: 800px;
+            max-width: 900px;
             height: 90vh;
             display: flex;
             flex-direction: column;
@@ -103,12 +116,11 @@
         }
 
         .message-content {
-            max-width: 70%;
+            max-width: 75%;
             padding: 12px 16px;
             border-radius: 12px;
-            line-height: 1.5;
+            line-height: 1.6;
             word-wrap: break-word;
-            white-space: pre-wrap;
         }
 
         .message.user .message-content {
@@ -122,6 +134,133 @@
             color: #1e293b;
             border: 1px solid #e2e8f0;
             border-bottom-left-radius: 4px;
+        }
+
+        /* Markdown content styling */
+        .message-content.rendered {
+            font-size: 15px;
+        }
+
+        .message-content.rendered h1 {
+            font-size: 1.8em;
+            margin: 0.5em 0 0.3em 0;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .message-content.rendered h2 {
+            font-size: 1.5em;
+            margin: 0.5em 0 0.3em 0;
+            font-weight: 600;
+            color: #334155;
+        }
+
+        .message-content.rendered h3 {
+            font-size: 1.3em;
+            margin: 0.4em 0 0.2em 0;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .message-content.rendered p {
+            margin: 0.8em 0;
+        }
+
+        .message-content.rendered ul,
+        .message-content.rendered ol {
+            margin: 0.8em 0;
+            padding-left: 2em;
+        }
+
+        .message-content.rendered li {
+            margin: 0.3em 0;
+        }
+
+        .message-content.rendered pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1em 0;
+            font-size: 14px;
+        }
+
+        .message-content.rendered code {
+            background: #f1f5f9;
+            color: #e11d48;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .message-content.rendered pre code {
+            background: transparent;
+            color: #e2e8f0;
+            padding: 0;
+        }
+
+        .message-content.rendered blockquote {
+            border-left: 4px solid #667eea;
+            padding-left: 1em;
+            margin: 1em 0;
+            color: #64748b;
+            font-style: italic;
+        }
+
+        .message-content.rendered table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+
+        .message-content.rendered th,
+        .message-content.rendered td {
+            border: 1px solid #e2e8f0;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .message-content.rendered th {
+            background: #f8fafc;
+            font-weight: 600;
+        }
+
+        .message-content.rendered img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 1em 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-content.rendered a {
+            color: #667eea;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.2s;
+        }
+
+        .message-content.rendered a:hover {
+            border-bottom-color: #667eea;
+        }
+
+        .message-content.rendered hr {
+            border: none;
+            border-top: 2px solid #e2e8f0;
+            margin: 1.5em 0;
+        }
+
+        /* KaTeX math rendering */
+        .message-content.rendered .katex {
+            font-size: 1.1em;
+        }
+
+        .message-content.rendered .katex-display {
+            margin: 1em 0;
+            overflow-x: auto;
+            overflow-y: hidden;
         }
 
         .message-time {
@@ -301,8 +440,8 @@
                     <div class="suggestion-chip" onclick="sendSuggestion('Help me calculate ballot results: 30 Approve, 5 Disapprove, 10 Abstain')">
                         📊 Ballot calculation
                     </div>
-                    <div class="suggestion-chip" onclick="sendSuggestion('Generate an IEEE meeting agenda')">
-                        📝 Meeting agenda
+                    <div class="suggestion-chip" onclick="sendSuggestion('Show me a LaTeX formula: E = mc^2')">
+                        🔬 LaTeX math
                     </div>
                 </div>
             </div>
@@ -328,6 +467,20 @@
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
 
+        // Configure marked.js for markdown rendering
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    try {
+                        return hljs.highlight(code, { language: lang }).value;
+                    } catch (err) {}
+                }
+                return code;
+            }
+        });
+
         // Auto-resize textarea
         messageInput.addEventListener('input', function() {
             this.style.height = 'auto';
@@ -347,7 +500,32 @@
             sendMessage();
         }
 
-        function addMessage(role, content) {
+        function renderMarkdownContent(content) {
+            // First, render markdown to HTML
+            let html = marked.parse(content);
+
+            // Create a temporary div to work with the HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+
+            // Render LaTeX math using KaTeX
+            // Inline math: $...$
+            // Display math: $$...$$
+            renderMathInElement(tempDiv, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                    {left: '\\[', right: '\\]', display: true},
+                    {left: '\\(', right: '\\)', display: false}
+                ],
+                throwOnError: false,
+                trust: true
+            });
+
+            return tempDiv.innerHTML;
+        }
+
+        function addMessage(role, content, rendered = false) {
             // Remove welcome message if it exists
             const welcomeMsg = chatMessages.querySelector('.welcome-message');
             if (welcomeMsg) {
@@ -359,8 +537,15 @@
 
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            // Use textContent to prevent XSS
-            contentDiv.textContent = content;
+
+            if (rendered && role === 'assistant') {
+                // Render markdown with math for assistant messages
+                contentDiv.className += ' rendered';
+                contentDiv.innerHTML = renderMarkdownContent(content);
+            } else {
+                // Plain text for user messages (XSS safe)
+                contentDiv.textContent = content;
+            }
 
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
@@ -418,8 +603,8 @@
             messageInput.style.height = 'auto';
             sendButton.disabled = true;
 
-            // Add user message
-            addMessage('user', message);
+            // Add user message (plain text, no rendering)
+            addMessage('user', message, false);
 
             // Show typing indicator
             showTypingIndicator();
@@ -435,7 +620,7 @@
                     },
                     body: JSON.stringify({
                         model: 'claude-sonnet-4-5-20250929',
-                        max_tokens: 2048,
+                        max_tokens: 4096,
                         messages: [
                             {
                                 role: 'user',
@@ -461,8 +646,8 @@
                     responseText = 'Empty response from agent';
                 }
 
-                // Add assistant message
-                addMessage('assistant', responseText);
+                // Add assistant message with markdown rendering
+                addMessage('assistant', responseText, true);
 
             } catch (error) {
                 hideTypingIndicator();
