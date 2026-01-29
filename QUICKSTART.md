@@ -123,3 +123,160 @@ uv sync
 5. **KSTAR logs** → Every interaction saved to memory
 
 Every message demonstrates the P3394 standard in action!
+
+---
+
+## Advanced: Multi-Channel Testing
+
+The agent supports **multiple channel interfaces** simultaneously!
+
+### Start with All Channels
+
+```bash
+# Start daemon with all channels enabled
+uv run python -m ieee3394_agent --daemon \
+  --anthropic-api --api-port 8100 \
+  --p3394-server --p3394-port 8101
+```
+
+This enables:
+- ✅ **CLI** (Unix socket) - Interactive REPL
+- ✅ **HTTP API** (port 8100) - Anthropic-compatible API
+- ✅ **P3394 Server** (port 8101) - Agent-to-agent protocol
+
+### Test All Channels
+
+Run the automated test suite:
+
+```bash
+python test_channels.py
+```
+
+Expected output:
+```
+==================================================================
+TEST: Unix Socket (CLI Channel)
+==================================================================
+✓ Connected to /tmp/ieee3394-agent.sock
+✓ Sent test message
+✓ Received response
+
+==================================================================
+TEST: Anthropic API HTTP Channel
+==================================================================
+✓ Received response
+✓ Streaming works! Received 245 characters
+
+==================================================================
+TEST: P3394 Server Channel
+==================================================================
+✓ Health check passed
+✓ Agent ID: ieee3394-exemplar
+✓ Received P3394 response
+
+==================================================================
+TEST: IEEE WG Manager Skill
+==================================================================
+✓ Ballot calculation response received
+✓ Skill appears to be working
+
+==================================================================
+TEST SUMMARY
+==================================================================
+✓ Unix Socket          PASSED
+✓ Anthropic API        PASSED
+✓ P3394 Server         PASSED
+✓ IEEE WG Skill        PASSED
+
+Results: 4/4 tests passed
+🎉 All tests passed!
+```
+
+### Test via HTTP API
+
+```bash
+curl -X POST http://localhost:8100/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: test-key" \
+  -d '{
+    "model": "claude-sonnet-4-5-20250929",
+    "max_tokens": 1024,
+    "messages": [{
+      "role": "user",
+      "content": "What is IEEE P3394?"
+    }]
+  }'
+```
+
+### Test via P3394 Protocol
+
+```bash
+curl -X POST http://localhost:8101/message \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "request",
+    "content": [{
+      "type": "text",
+      "data": "What skills do you have?"
+    }]
+  }'
+```
+
+### Connect Claude Code CLI to Your Agent
+
+Make Claude Code use your local agent instead of Anthropic's API:
+
+```bash
+# Configure environment
+export ANTHROPIC_BASE_URL=http://localhost:8100
+export ANTHROPIC_API_KEY=test-key
+
+# Now use Claude Code normally - it connects to YOUR agent!
+claude "What is P3394?"
+claude "Help me with an IEEE ballot calculation"
+```
+
+---
+
+## Test the IEEE WG Manager Skill
+
+The agent includes a comprehensive IEEE Working Group management skill!
+
+### Via CLI
+```
+>>> Help me prepare for an IEEE sponsor ballot
+>>> Calculate ballot results: 30 Approve, 5 Disapprove, 10 Abstain
+>>> Generate an IEEE meeting agenda
+>>> What are the standards lifecycle milestones?
+```
+
+### Via HTTP API
+```bash
+curl -X POST http://localhost:8100/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: test-key" \
+  -d '{
+    "model": "claude-sonnet-4-5-20250929",
+    "max_tokens": 2048,
+    "messages": [{
+      "role": "user",
+      "content": "Help me consolidate ballot comments and create a disposition document"
+    }]
+  }'
+```
+
+The skill includes:
+- 📋 Ballot tracking and approval calculations
+- 📝 Meeting agendas and minutes templates
+- 💬 Comment consolidation tools
+- 📊 Action item tracking
+- 📖 Complete IEEE process documentation
+
+---
+
+## Next Steps
+
+1. **Full Testing Guide**: See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive channel testing
+2. **Skills Documentation**: See [.claude/skills/README.md](.claude/skills/README.md) for skill details
+3. **Architecture Deep Dive**: See [CLAUDE.md](CLAUDE.md) for complete system architecture
+4. **Branch Status**: See [BRANCH_READY.md](BRANCH_READY.md) for merge preparation status
