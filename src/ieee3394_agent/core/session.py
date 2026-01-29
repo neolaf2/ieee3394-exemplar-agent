@@ -2,13 +2,18 @@
 Session Management
 
 Manages client sessions with the agent, including session creation,
-expiration, and cleanup.
+expiration, cleanup, and shared working directories.
 """
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 from uuid import uuid4
+from pathlib import Path
+import logging
+import shutil
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -24,6 +29,9 @@ class Session:
     is_authenticated: bool = False
     metadata: Dict = field(default_factory=dict)
 
+    # Shared working directory (set during initialization)
+    working_dir: Optional[Path] = None
+
     def is_expired(self) -> bool:
         """Check if session has expired"""
         if self.expires_at is None:
@@ -34,15 +42,50 @@ class Session:
         """Update last activity timestamp"""
         self.last_activity = datetime.now(timezone.utc)
 
+    def has_permission(self, permission: str) -> bool:
+        """Check if session has a specific permission"""
+        # For now, authenticated sessions have all permissions
+        # In the future, this should check against a permissions list
+        return self.is_authenticated
+
+    def get_workspace_dir(self) -> Path:
+        """Get the workspace subdirectory"""
+        if not self.working_dir:
+            raise RuntimeError("Session working directory not initialized")
+        return self.working_dir / "workspace"
+
+    def get_artifacts_dir(self) -> Path:
+        """Get the artifacts subdirectory"""
+        if not self.working_dir:
+            raise RuntimeError("Session working directory not initialized")
+        return self.working_dir / "artifacts"
+
+    def get_temp_dir(self) -> Path:
+        """Get the temporary files subdirectory"""
+        if not self.working_dir:
+            raise RuntimeError("Session working directory not initialized")
+        return self.working_dir / "temp"
+
+    def get_tools_dir(self) -> Path:
+        """Get the tools subdirectory"""
+        if not self.working_dir:
+            raise RuntimeError("Session working directory not initialized")
+        return self.working_dir / "tools"
+
 
 class SessionManager:
     """Manages agent sessions"""
 
     DEFAULT_TTL = timedelta(hours=24)
 
-    def __init__(self, default_ttl: Optional[timedelta] = None):
+    def __init__(
+        self,
+        default_ttl: Optional[timedelta] = None,
+        storage_dir: Optional[Path] = None
+    ):
         self.sessions: Dict[str, Session] = {}
         self.default_ttl = default_ttl or self.DEFAULT_TTL
+        self.storage_dir = storage_dir
 
     @property
     def active_sessions(self) -> Dict[str, Session]:
@@ -55,15 +98,43 @@ class SessionManager:
         channel_id: Optional[str] = None,
         ttl: Optional[timedelta] = None
     ) -> Session:
-        """Create a new session"""
+        """Create a new session with shared working directory"""
         ttl = ttl or self.default_ttl
         session = Session(
             client_id=client_id,
             channel_id=channel_id,
             expires_at=datetime.now(timezone.utc) + ttl
         )
+
+        # Create shared working directory structure
+        if self.storage_dir:
+            session.working_dir = self._create_working_directory(session.id)
+
         self.sessions[session.id] = session
         return session
+
+    def _create_working_directory(self, session_id: str) -> Path:
+        """
+        Create shared working directory structure for session.
+
+        Structure:
+        storage_dir/stm/<session_id>/shared/
+        ├── workspace/    # Primary working directory for agent
+        ├── artifacts/    # Generated artifacts (docs, PDFs, etc.)
+        ├── temp/         # Temporary files
+        └── tools/        # Session-specific tools (pandoc, ffmpeg, etc.)
+        """
+        base_dir = self.storage_dir / "stm" / session_id / "shared"
+
+        # Create subdirectories
+        subdirs = ["workspace", "artifacts", "temp", "tools"]
+        for subdir in subdirs:
+            dir_path = base_dir / subdir
+            dir_path.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"Created session directory: {dir_path}")
+
+        logger.info(f"Created shared working directory for session {session_id}: {base_dir}")
+        return base_dir
 
     def get_session(self, session_id: str) -> Optional[Session]:
         """Get a session by ID"""

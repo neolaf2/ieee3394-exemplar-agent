@@ -67,7 +67,7 @@ class AgentGateway:
         working_dir: Optional[Path] = None
     ):
         self.memory = memory
-        self.session_manager = SessionManager()
+        self.session_manager = SessionManager(storage_dir=self.memory.storage.base_dir if self.memory.storage else None)
         self.working_dir = working_dir if isinstance(working_dir, Path) else Path(working_dir) if working_dir else Path.cwd()
 
         # NEW: Unified capability system
