@@ -146,21 +146,23 @@ Capabilities are classified on two dimensions:
 │                                                                  │
 │   Power Level (WHAT)          Cognitive Pattern (HOW)           │
 │   ─────────────────           ───────────────────────           │
-│   STANDARD      ───────────── execution, procedural             │
-│   META          ───────────── orchestration, diagnostic         │
-│   SELF_MODIFYING ────────────  procedural + state mutation      │
-│   BOOTSTRAP     ───────────── foundation tools                  │
+│   STANDARD (33)  ───────────── execution, reflective            │
+│   META (6)       ───────────── execution, generative            │
+│   SELF_MODIFYING (4) ────────  procedural, execution            │
+│   BOOTSTRAP (10) ───────────── execution, orchestration         │
 │                                                                  │
-│   Examples:                                                      │
-│   ┌─────────────────┬─────────────────┬───────────────────┐    │
-│   │ Capability      │ Power Level     │ Cognitive Pattern │    │
-│   ├─────────────────┼─────────────────┼───────────────────┤    │
-│   │ ralph-loop      │ STANDARD        │ iterative         │    │
-│   │ systematic-debug│ META            │ diagnostic        │    │
-│   │ skill-creator   │ SELF_MODIFYING  │ procedural        │    │
-│   │ brainstorming   │ META            │ generative        │    │
-│   │ pdf             │ STANDARD        │ execution         │    │
-│   └─────────────────┴─────────────────┴───────────────────┘    │
+│   Verified Examples (from test run):                            │
+│   ┌─────────────────────────┬─────────────────┬───────────────┐│
+│   │ Capability              │ Power Level     │ Cognitive     ││
+│   ├─────────────────────────┼─────────────────┼───────────────┤│
+│   │ tool.sdk.task           │ BOOTSTRAP       │ orchestration ││
+│   │ skill.skill-creator     │ SELF_MODIFYING  │ procedural    ││
+│   │ skill.scientific-       │ META            │ generative    ││
+│   │   brainstorming         │                 │               ││
+│   │ skill.neolaf-business-  │ STANDARD        │ reflective    ││
+│   │   plan-reviewer         │                 │               ││
+│   │ command.help            │ STANDARD        │ execution     ││
+│   └─────────────────────────┴─────────────────┴───────────────┘│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -284,17 +286,15 @@ GET /api/catalog/manifest
             "sdk": 9
         },
         "by_power_level": {
-            "standard": 45,
-            "meta": 5,
-            "self_modifying": 3,
-            "bootstrap": 0
+            "standard": 33,
+            "meta": 6,
+            "self_modifying": 4,
+            "bootstrap": 10
         },
         "by_cognitive_pattern": {
-            "execution": 40,
-            "procedural": 5,
-            "iterative": 2,
-            "diagnostic": 2,
-            "generative": 2,
+            "execution": 47,
+            "procedural": 3,
+            "generative": 1,
             "orchestration": 1,
             "reflective": 1
         },
@@ -324,6 +324,67 @@ GET /api/catalog/manifest
 }
 ```
 
+### Tested API Examples
+
+These examples have been verified against a running agent:
+
+```bash
+# Get methodological skills (non-execution cognitive patterns)
+$ curl -s "http://localhost:8000/api/catalog?methodological_only=true" | jq '.entries[] | {id, power_level, cognitive_pattern}'
+{
+  "id": "skill.Hook Development",
+  "power_level": "self_modifying",
+  "cognitive_pattern": "procedural"
+}
+{
+  "id": "skill.scientific-brainstorming",
+  "power_level": "meta",
+  "cognitive_pattern": "generative"
+}
+{
+  "id": "skill.skill-creator",
+  "power_level": "self_modifying",
+  "cognitive_pattern": "procedural"
+}
+{
+  "id": "tool.sdk.task",
+  "power_level": "bootstrap",
+  "cognitive_pattern": "orchestration"
+}
+
+# Get bootstrap-level capabilities (factory essentials)
+$ curl -s "http://localhost:8000/api/catalog?power_level=bootstrap" | jq '.entries[] | .id'
+"core.llm.invoke"
+"core.session.create"
+"core.session.destroy"
+"tool.sdk.bash"
+"tool.sdk.edit"
+"tool.sdk.glob"
+"tool.sdk.grep"
+"tool.sdk.read"
+"tool.sdk.task"
+"tool.sdk.write"
+
+# Get self-modifying capabilities (admin only)
+$ curl -s "http://localhost:8000/api/catalog?power_level=self_modifying" | jq '.entries[] | {id, cognitive_pattern}'
+{
+  "id": "command.configure",
+  "cognitive_pattern": "execution"
+}
+{
+  "id": "skill.Hook Development",
+  "cognitive_pattern": "procedural"
+}
+{
+  "id": "skill.skill-creator",
+  "cognitive_pattern": "procedural"
+}
+
+# Get client-safe capabilities (33 capabilities)
+$ curl -s "http://localhost:8000/api/catalog?safe_for_client=true" | jq '.count'
+33
+```
+
 ## Sync Status
 
 The catalog tracks synchronization between system and memory:
@@ -349,12 +410,15 @@ await catalog.sync_to_memory()
 ### CapabilityCatalog Class
 
 ```python
-from p3394_agent.core.capability_catalog import CapabilityCatalog
+from p3394_agent.core.capability_catalog import (
+    CapabilityCatalog, CapabilityType, CapabilitySource,
+    CapabilityPowerLevel, CognitivePattern
+)
 
 # Access via gateway
 catalog = gateway.capability_catalog
 
-# Query methods
+# Basic query methods
 all_caps = catalog.list_all()
 skills = catalog.list_by_type(CapabilityType.SKILL)
 builtin = catalog.list_by_source(CapabilitySource.BUILTIN)
@@ -368,6 +432,44 @@ stats = catalog.get_stats()
 
 # Export as manifest
 manifest = catalog.to_manifest()
+```
+
+### Power Level Queries
+
+```python
+# Query by power level
+standard = catalog.list_by_power_level(CapabilityPowerLevel.STANDARD)
+meta = catalog.list_by_power_level(CapabilityPowerLevel.META)
+self_mod = catalog.list_by_power_level(CapabilityPowerLevel.SELF_MODIFYING)
+bootstrap = catalog.list_by_power_level(CapabilityPowerLevel.BOOTSTRAP)
+
+# Convenience methods
+safe_caps = catalog.list_safe_for_client()      # STANDARD only, enabled
+meta_skills = catalog.list_meta_skills()         # META level
+self_mod_caps = catalog.list_self_modifying()    # SELF_MODIFYING level
+factory_caps = catalog.list_bootstrap_essential() # BOOTSTRAP level
+```
+
+### Cognitive Pattern Queries
+
+```python
+# Query by cognitive pattern
+execution = catalog.list_by_cognitive_pattern(CognitivePattern.EXECUTION)
+procedural = catalog.list_by_cognitive_pattern(CognitivePattern.PROCEDURAL)
+iterative = catalog.list_by_cognitive_pattern(CognitivePattern.ITERATIVE)
+diagnostic = catalog.list_by_cognitive_pattern(CognitivePattern.DIAGNOSTIC)
+generative = catalog.list_by_cognitive_pattern(CognitivePattern.GENERATIVE)
+orchestration = catalog.list_by_cognitive_pattern(CognitivePattern.ORCHESTRATION)
+reflective = catalog.list_by_cognitive_pattern(CognitivePattern.REFLECTIVE)
+
+# Get all methodological skills (non-execution patterns)
+methodological = catalog.list_methodological_skills()
+
+# Convenience methods
+iterative_skills = catalog.list_iterative_skills()    # Loop-until patterns
+diagnostic_skills = catalog.list_diagnostic_skills()  # Hypothesis-test patterns
+generative_skills = catalog.list_generative_skills()  # Creative ideation
+orchestration_skills = catalog.list_orchestration_skills()  # Multi-capability coordination
 ```
 
 ### Adding Capabilities Dynamically
