@@ -113,6 +113,30 @@ class CognitivePattern(str, Enum):
     REFLECTIVE = "reflective"       # Self-monitoring, quality gates
 
 
+class ComputeSubstrate(int, Enum):
+    """
+    Compute substrate taxonomy for capabilities.
+
+    This classifies the computational substrate used by a capability:
+    - SYMBOLIC (0): Pure symbolic computation, no LLM involvement
+      Examples: /help, /status, /version - instant, deterministic
+    - NEURAL (1): Uses LLM/neural network for processing
+      Examples: chat, most skills - requires API call, non-deterministic
+    - COMPOSITE (2): Combines symbolic and neural processing
+      Examples: skills with symbolic triggers but LLM processing,
+      or capabilities that do symbolic pre/post-processing around LLM calls
+
+    This determines:
+    - Latency: SYMBOLIC is instant, NEURAL has API latency
+    - Cost: SYMBOLIC is free, NEURAL incurs API costs
+    - Determinism: SYMBOLIC is deterministic, NEURAL varies
+    - Offline capability: SYMBOLIC works offline, NEURAL needs API
+    """
+    SYMBOLIC = 0    # Pure symbolic, no LLM (instant, deterministic, free)
+    NEURAL = 1      # LLM-based processing (latency, cost, non-deterministic)
+    COMPOSITE = 2   # Combines symbolic and neural (hybrid)
+
+
 # Classification of known capabilities by power level
 POWER_LEVEL_CLASSIFICATIONS = {
     # BOOTSTRAP level - SDK and factory essentials
@@ -234,6 +258,64 @@ def classify_cognitive_pattern(capability_id: str) -> CognitivePattern:
     return CognitivePattern.EXECUTION
 
 
+# Classification of known capabilities by compute substrate
+COMPUTE_SUBSTRATE_CLASSIFICATIONS = {
+    # SYMBOLIC - Pure symbolic, no LLM (commands, SDK tools)
+    ComputeSubstrate.SYMBOLIC: {
+        # Commands are instant symbolic dispatch
+        "command.help", "command.about", "command.status", "command.version",
+        "command.login", "command.listSkills", "command.endpoints", "command.configure",
+        # SDK tools are symbolic (though they may interact with external systems)
+        "tool.sdk.read", "tool.sdk.write", "tool.sdk.edit", "tool.sdk.bash",
+        "tool.sdk.glob", "tool.sdk.grep", "tool.sdk.websearch", "tool.sdk.webfetch",
+        # Core session management is symbolic
+        "core.session.create", "core.session.destroy",
+        # Channels are symbolic infrastructure
+        "channel.cli", "channel.unified-web", "channel.whatsapp",
+    },
+    # NEURAL - Requires LLM processing
+    ComputeSubstrate.NEURAL: {
+        "core.llm.invoke", "core.chat", "core.chat.with_tools",
+        "core.message.handle",  # Message handling involves LLM
+    },
+    # COMPOSITE is the default for skills (symbolic trigger + neural processing)
+}
+
+
+def classify_compute_substrate(capability_id: str) -> ComputeSubstrate:
+    """
+    Classify a capability's compute substrate based on its ID.
+
+    - SYMBOLIC: Commands, SDK tools, session management
+    - NEURAL: Core LLM capabilities, chat
+    - COMPOSITE: Skills (symbolic trigger + neural processing)
+    """
+    for substrate, ids in COMPUTE_SUBSTRATE_CLASSIFICATIONS.items():
+        if capability_id in ids:
+            return substrate
+
+    # Pattern-based classification
+    if capability_id.startswith("command."):
+        return ComputeSubstrate.SYMBOLIC
+    if capability_id.startswith("tool.sdk.") or capability_id.startswith("tool.mcp."):
+        return ComputeSubstrate.SYMBOLIC
+    if capability_id.startswith("channel."):
+        return ComputeSubstrate.SYMBOLIC
+    if capability_id.startswith("core.session."):
+        return ComputeSubstrate.SYMBOLIC
+
+    # Core LLM capabilities are neural
+    if "llm" in capability_id.lower() or "chat" in capability_id.lower():
+        return ComputeSubstrate.NEURAL
+
+    # Skills are composite by default (symbolic trigger + LLM processing)
+    if capability_id.startswith("skill."):
+        return ComputeSubstrate.COMPOSITE
+
+    # Default to composite for unknown
+    return ComputeSubstrate.COMPOSITE
+
+
 @dataclass
 class CatalogEntry:
     """Entry in the capability catalog"""
@@ -251,6 +333,9 @@ class CatalogEntry:
     # Cognitive pattern classification (HOW it operates)
     cognitive_pattern: CognitivePattern = CognitivePattern.EXECUTION
 
+    # Compute substrate classification (symbolic/neural/composite)
+    compute_substrate: ComputeSubstrate = ComputeSubstrate.COMPOSITE
+
     # Source location
     source_path: Optional[str] = None          # File path if applicable
     source_module: Optional[str] = None        # Python module if applicable
@@ -267,13 +352,16 @@ class CatalogEntry:
     in_system: bool = True                     # Is it in the system?
 
     def __post_init__(self):
-        """Auto-classify power level and cognitive pattern if not explicitly set"""
+        """Auto-classify power level, cognitive pattern, and compute substrate if not explicitly set"""
         if self.power_level == CapabilityPowerLevel.STANDARD:
             # Check if this capability should have a higher power level
             self.power_level = classify_power_level(self.id)
         if self.cognitive_pattern == CognitivePattern.EXECUTION:
             # Check if this capability has a different cognitive pattern
             self.cognitive_pattern = classify_cognitive_pattern(self.id)
+        if self.compute_substrate == ComputeSubstrate.COMPOSITE:
+            # Check if this capability has a different compute substrate
+            self.compute_substrate = classify_compute_substrate(self.id)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary"""
@@ -287,6 +375,7 @@ class CatalogEntry:
             "enabled": self.enabled,
             "power_level": self.power_level.value,
             "cognitive_pattern": self.cognitive_pattern.value,
+            "compute_substrate": self.compute_substrate.value,
             "source_path": self.source_path,
             "source_module": self.source_module,
             "metadata": self.metadata,
@@ -315,6 +404,14 @@ class CatalogEntry:
             except ValueError:
                 pass
 
+        # Parse compute substrate, defaulting to COMPOSITE
+        compute_substrate = ComputeSubstrate.COMPOSITE
+        if data.get("compute_substrate") is not None:
+            try:
+                compute_substrate = ComputeSubstrate(data["compute_substrate"])
+            except ValueError:
+                pass
+
         return cls(
             id=data["id"],
             name=data["name"],
@@ -325,6 +422,7 @@ class CatalogEntry:
             enabled=data.get("enabled", True),
             power_level=power_level,
             cognitive_pattern=cognitive_pattern,
+            compute_substrate=compute_substrate,
             source_path=data.get("source_path"),
             source_module=data.get("source_module"),
             metadata=data.get("metadata", {}),
@@ -891,18 +989,56 @@ class CapabilityCatalog:
         """List orchestration skills (coordinate multiple capabilities)"""
         return self.list_by_cognitive_pattern(CognitivePattern.ORCHESTRATION)
 
+    # =========================================================================
+    # COMPUTE SUBSTRATE QUERIES
+    # =========================================================================
+
+    def list_by_compute_substrate(self, substrate: ComputeSubstrate) -> List[CatalogEntry]:
+        """
+        List entries by compute substrate.
+
+        Compute substrates describe the computational basis:
+        - SYMBOLIC (0): Pure symbolic, no LLM (instant, deterministic, free)
+        - NEURAL (1): LLM-based processing (latency, cost, non-deterministic)
+        - COMPOSITE (2): Combines symbolic and neural (hybrid)
+        """
+        return [e for e in self._entries.values() if e.compute_substrate == substrate]
+
+    def list_symbolic_capabilities(self) -> List[CatalogEntry]:
+        """List pure symbolic capabilities (no LLM, instant execution)"""
+        return self.list_by_compute_substrate(ComputeSubstrate.SYMBOLIC)
+
+    def list_neural_capabilities(self) -> List[CatalogEntry]:
+        """List neural capabilities (LLM-based processing)"""
+        return self.list_by_compute_substrate(ComputeSubstrate.NEURAL)
+
+    def list_composite_capabilities(self) -> List[CatalogEntry]:
+        """List composite capabilities (symbolic + neural)"""
+        return self.list_by_compute_substrate(ComputeSubstrate.COMPOSITE)
+
+    def list_offline_capable(self) -> List[CatalogEntry]:
+        """List capabilities that work offline (SYMBOLIC only)"""
+        return [
+            e for e in self._entries.values()
+            if e.compute_substrate == ComputeSubstrate.SYMBOLIC and e.enabled
+        ]
+
     def get_stats(self) -> Dict[str, Any]:
         """Get catalog statistics"""
         by_type = {}
         by_source = {}
         by_power_level = {}
         by_cognitive_pattern = {}
+        by_compute_substrate = {}
 
         for entry in self._entries.values():
             by_type[entry.type.value] = by_type.get(entry.type.value, 0) + 1
             by_source[entry.source.value] = by_source.get(entry.source.value, 0) + 1
             by_power_level[entry.power_level.value] = by_power_level.get(entry.power_level.value, 0) + 1
             by_cognitive_pattern[entry.cognitive_pattern.value] = by_cognitive_pattern.get(entry.cognitive_pattern.value, 0) + 1
+            # Use name (lowercase) for compute_substrate instead of integer value
+            substrate_name = entry.compute_substrate.name.lower()
+            by_compute_substrate[substrate_name] = by_compute_substrate.get(substrate_name, 0) + 1
 
         in_both = sum(1 for e in self._entries.values() if e.in_memory and e.in_system)
         only_system = sum(1 for e in self._entries.values() if e.in_system and not e.in_memory)
@@ -914,6 +1050,7 @@ class CapabilityCatalog:
             "by_source": by_source,
             "by_power_level": by_power_level,
             "by_cognitive_pattern": by_cognitive_pattern,
+            "by_compute_substrate": by_compute_substrate,
             "enabled": sum(1 for e in self._entries.values() if e.enabled),
             "sync_status": {
                 "in_both": in_both,

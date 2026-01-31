@@ -135,35 +135,82 @@ Cognitive patterns classify HOW a capability operates (its methodology). This is
 "skill.echo", "skill.pdf", "skill.docx"
 ```
 
-#### Two-Dimensional Classification
+### Compute Substrate
 
-Capabilities are classified on two dimensions:
+Compute substrate classifies the computational basis of each capability:
+
+| Substrate | Value | Description | Characteristics |
+|-----------|-------|-------------|-----------------|
+| `symbolic` | 0 | Pure symbolic execution, no LLM | Instant, deterministic, free, works offline |
+| `neural` | 1 | LLM-based processing | Latency, cost, non-deterministic |
+| `composite` | 2 | Combines symbolic and neural | Hybrid approach, most skills |
+
+#### Compute Substrate Classification
+
+```python
+# SYMBOLIC (0) - Instant, deterministic, no LLM needed
+"command.help", "command.about", "command.status", "command.version"
+"command.login", "command.listSkills", "command.endpoints"
+"tool.sdk.read", "tool.sdk.write", "tool.sdk.edit", "tool.sdk.bash"
+"core.session.create", "core.session.destroy"
+"channel.cli", "channel.unified-web", "channel.whatsapp"
+
+# NEURAL (1) - Requires LLM, non-deterministic
+"core.llm.invoke", "core.chat", "core.chat.with_tools"
+"core.message.handle"
+
+# COMPOSITE (2) - Default for most skills
+"skill.*"  # Most skills combine symbolic routing with neural processing
+```
+
+#### Use Cases for Compute Substrate
+
+- **Offline Mode**: Query `compute_substrate=symbolic` for capabilities available without network
+- **Cost Optimization**: Prefer symbolic capabilities to reduce LLM usage
+- **Latency Sensitive**: Use symbolic for instant response requirements
+- **Determinism**: Symbolic operations are repeatable with identical outputs
+
+#### Three-Dimensional Classification
+
+Capabilities are now classified on three orthogonal dimensions:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│           Capability Classification Matrix                       │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   Power Level (WHAT)          Cognitive Pattern (HOW)           │
-│   ─────────────────           ───────────────────────           │
-│   STANDARD (33)  ───────────── execution, reflective            │
-│   META (6)       ───────────── execution, generative            │
-│   SELF_MODIFYING (4) ────────  procedural, execution            │
-│   BOOTSTRAP (10) ───────────── execution, orchestration         │
-│                                                                  │
-│   Verified Examples (from test run):                            │
-│   ┌─────────────────────────┬─────────────────┬───────────────┐│
-│   │ Capability              │ Power Level     │ Cognitive     ││
-│   ├─────────────────────────┼─────────────────┼───────────────┤│
-│   │ tool.sdk.task           │ BOOTSTRAP       │ orchestration ││
-│   │ skill.skill-creator     │ SELF_MODIFYING  │ procedural    ││
-│   │ skill.scientific-       │ META            │ generative    ││
-│   │   brainstorming         │                 │               ││
-│   │ skill.neolaf-business-  │ STANDARD        │ reflective    ││
-│   │   plan-reviewer         │                 │               ││
-│   │ command.help            │ STANDARD        │ execution     ││
-│   └─────────────────────────┴─────────────────┴───────────────┘│
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│           Capability Classification Matrix (3D)                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Dimension 1: Power Level (WHAT it can access)                     │
+│   ─────────────────────────────────────────────                     │
+│   STANDARD (33)     - Isolated task execution                       │
+│   META (6)          - Can invoke other capabilities                 │
+│   SELF_MODIFYING (4) - Can modify agent state                       │
+│   BOOTSTRAP (10)    - Factory-essential                             │
+│                                                                      │
+│   Dimension 2: Cognitive Pattern (HOW it operates)                  │
+│   ────────────────────────────────────────────────                  │
+│   execution (47)    - Single-shot task                              │
+│   procedural (3)    - Step-by-step workflow                         │
+│   generative (1)    - Divergent ideation                            │
+│   orchestration (1) - Coordinates multiple capabilities             │
+│   reflective (1)    - Self-monitoring, quality gates                │
+│                                                                      │
+│   Dimension 3: Compute Substrate (computational basis)              │
+│   ─────────────────────────────────────────────────                 │
+│   symbolic (0)      - No LLM, instant, deterministic                │
+│   neural (1)        - LLM-based, latency, non-deterministic        │
+│   composite (2)     - Hybrid symbolic + neural                      │
+│                                                                      │
+│   Example Classifications:                                           │
+│   ┌─────────────────────┬─────────────┬──────────────┬────────────┐│
+│   │ Capability          │ Power       │ Cognitive    │ Substrate  ││
+│   ├─────────────────────┼─────────────┼──────────────┼────────────┤│
+│   │ command.help        │ STANDARD    │ execution    │ symbolic   ││
+│   │ core.llm.invoke     │ BOOTSTRAP   │ execution    │ neural     ││
+│   │ skill.site-generator│ STANDARD    │ procedural   │ composite  ││
+│   │ tool.sdk.read       │ BOOTSTRAP   │ execution    │ symbolic   ││
+│   │ skill.brainstorming │ META        │ generative   │ composite  ││
+│   └─────────────────────┴─────────────┴──────────────┴────────────┘│
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Discovery Process
@@ -227,12 +274,13 @@ class CatalogEntry:
     enabled: bool              # Is it enabled?
     power_level: PowerLevel    # standard, meta, self_modifying, bootstrap
     cognitive_pattern: Pattern # execution, procedural, iterative, diagnostic, etc.
+    compute_substrate: Substrate # symbolic (0), neural (1), composite (2)
     source_path: str           # File path if applicable
     in_memory: bool            # Synced to KSTAR memory?
     in_system: bool            # Found in system?
 ```
 
-Both power_level and cognitive_pattern are auto-classified based on capability ID when not explicitly set.
+All three dimensions (power_level, cognitive_pattern, compute_substrate) are auto-classified based on capability ID when not explicitly set.
 
 ## API Reference
 
@@ -257,11 +305,18 @@ GET /api/catalog?safe_for_client=true
 # Filter by cognitive pattern
 GET /api/catalog?cognitive_pattern=iterative
 
+# Filter by compute substrate
+GET /api/catalog?compute_substrate=symbolic
+
 # Get only methodological skills (non-execution patterns)
 GET /api/catalog?methodological_only=true
 
+# Get only offline-capable capabilities (symbolic substrate)
+GET /api/catalog?offline_only=true
+
 # Combine filters
 GET /api/catalog?type_filter=skill&power_level=meta
+GET /api/catalog?compute_substrate=symbolic&type_filter=command
 
 # Get catalog manifest
 GET /api/catalog/manifest
@@ -298,6 +353,11 @@ GET /api/catalog/manifest
             "orchestration": 1,
             "reflective": 1
         },
+        "by_compute_substrate": {
+            "symbolic": 22,
+            "neural": 4,
+            "composite": 27
+        },
         "enabled": 53,
         "sync_status": {
             "in_both": 53,
@@ -316,6 +376,7 @@ GET /api/catalog/manifest
             "enabled": true,
             "power_level": "standard",
             "cognitive_pattern": "execution",
+            "compute_substrate": "symbolic",
             "in_memory": true,
             "in_system": true
         }
@@ -412,7 +473,7 @@ await catalog.sync_to_memory()
 ```python
 from p3394_agent.core.capability_catalog import (
     CapabilityCatalog, CapabilityType, CapabilitySource,
-    CapabilityPowerLevel, CognitivePattern
+    CapabilityPowerLevel, CognitivePattern, ComputeSubstrate
 )
 
 # Access via gateway
@@ -470,6 +531,22 @@ iterative_skills = catalog.list_iterative_skills()    # Loop-until patterns
 diagnostic_skills = catalog.list_diagnostic_skills()  # Hypothesis-test patterns
 generative_skills = catalog.list_generative_skills()  # Creative ideation
 orchestration_skills = catalog.list_orchestration_skills()  # Multi-capability coordination
+```
+
+### Compute Substrate Queries
+
+```python
+from p3394_agent.core.capability_catalog import ComputeSubstrate
+
+# Query by compute substrate
+symbolic = catalog.list_by_compute_substrate(ComputeSubstrate.SYMBOLIC)
+neural = catalog.list_by_compute_substrate(ComputeSubstrate.NEURAL)
+composite = catalog.list_by_compute_substrate(ComputeSubstrate.COMPOSITE)
+
+# Convenience methods
+symbolic_caps = catalog.list_symbolic_capabilities()  # Pure symbolic, no LLM
+neural_caps = catalog.list_neural_capabilities()      # LLM-based
+offline = catalog.list_offline_capable()              # Symbolic + enabled (works offline)
 ```
 
 ### Adding Capabilities Dynamically
