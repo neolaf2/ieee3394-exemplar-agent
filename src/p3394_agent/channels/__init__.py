@@ -10,11 +10,22 @@ Available adapters:
   - /api/ - REST API
   - /v1/  - Anthropic API compatible
   - /p3394/ - P3394 native protocol
+- MCPServerAdapter: Inbound MCP server (exposes P3394 as MCP tools)
+- MCPClientAdapter: Outbound MCP client (connects to MCP subagents)
+- OutboundChannelRouter: Routes outbound messages to appropriate transport
 """
 
 from .base import ChannelAdapter, ChannelCapabilities
 from .cli import CLIChannelAdapter
 from .unified_web_server import UnifiedWebServer
+from .mcp import (
+    MCPServerAdapter,
+    MCPClientAdapter,
+    OutboundChannelRouter,
+    MCPToolDefinition,
+    MCPToolCall,
+    MCPToolResult,
+)
 
 # Legacy imports for backward compatibility
 from .anthropic_api_server import AnthropicAPIServerAdapter
@@ -25,6 +36,13 @@ __all__ = [
     "ChannelCapabilities",
     "CLIChannelAdapter",
     "UnifiedWebServer",
+    # MCP Channel Adapters
+    "MCPServerAdapter",
+    "MCPClientAdapter",
+    "OutboundChannelRouter",
+    "MCPToolDefinition",
+    "MCPToolCall",
+    "MCPToolResult",
     # Legacy
     "AnthropicAPIServerAdapter",
     "P3394ServerAdapter",
