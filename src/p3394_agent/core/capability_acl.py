@@ -433,15 +433,26 @@ class CapabilityACLRegistry:
         """
         Create a default ACL based on capability_id pattern.
 
+        DEFAULT-DENY POLICY:
+        All capabilities are restricted to admin/system by default.
+        Only explicitly public capabilities (help, about, login) are accessible to others.
+
         Patterns:
-        - core.* → PRIVATE, admin only
-        - internal.* → PRIVATE, admin only
-        - legacy.command.* → Based on command type
-        - * → LISTED, authenticated users
+        - core.* → PRIVATE, admin/system only
+        - internal.* → PRIVATE, admin/system only
+        - tool.* → PRIVATE, admin/system only (SDK and MCP tools)
+        - mcp.* → PRIVATE, admin/system only (MCP servers)
+        - skill.* → PRIVATE, admin/system only (internal skills)
+        - legacy.command.* → Based on command type (most are admin-only)
+        - exposed.skill.* → LISTED, can be granted to specific roles
+        - exposed.command.* → LISTED, can be granted to specific roles
+        - exposed.subagent.* → LISTED, can be granted to specific roles
+        - * → PRIVATE, admin/system only (default deny)
         """
         # Default visibility and permissions based on naming convention
+
+        # Core/internal capabilities - always admin/system only
         if capability_id.startswith("core.") or capability_id.startswith("internal."):
-            # Internal capabilities
             return CapabilityAccessControl(
                 capability_id=capability_id,
                 visibility=CapabilityVisibility.PRIVATE,
@@ -450,69 +461,138 @@ class CapabilityACLRegistry:
                     RolePermissionEntry(role="system", permissions=PERM_FULL),
                 ],
                 minimum_assurance=AssuranceLevel.HIGH,
+                default_permissions=PERM_NONE,  # No default permissions
             )
 
-        elif capability_id.startswith("legacy.command."):
-            # Legacy commands - map to appropriate visibility
-            cmd_name = capability_id.split(".")[-1]
+        # Tools (SDK tools like Read, Write, Bash) - admin/system only
+        elif capability_id.startswith("tool.") or capability_id.startswith("sdk.tool."):
+            return CapabilityAccessControl(
+                capability_id=capability_id,
+                visibility=CapabilityVisibility.PRIVATE,
+                role_permissions=[
+                    RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                    RolePermissionEntry(role="system", permissions=PERM_FULL),
+                ],
+                minimum_assurance=AssuranceLevel.HIGH,
+                default_permissions=PERM_NONE,
+            )
 
-            if cmd_name in ["help", "about", "version"]:
-                # Public commands
-                return CapabilityAccessControl(
-                    capability_id=capability_id,
-                    visibility=CapabilityVisibility.PUBLIC,
-                    role_permissions=[
-                        RolePermissionEntry(role="*", permissions=PERM_USE),
-                    ],
-                    default_permissions=PERM_USE,
-                )
+        # MCP servers and tools - admin/system only
+        elif capability_id.startswith("mcp.") or capability_id.startswith("mcp__"):
+            return CapabilityAccessControl(
+                capability_id=capability_id,
+                visibility=CapabilityVisibility.PRIVATE,
+                role_permissions=[
+                    RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                    RolePermissionEntry(role="system", permissions=PERM_FULL),
+                ],
+                minimum_assurance=AssuranceLevel.HIGH,
+                default_permissions=PERM_NONE,
+            )
 
-            elif cmd_name in ["login", "startSession"]:
-                # Session commands - public but limited
-                return CapabilityAccessControl(
-                    capability_id=capability_id,
-                    visibility=CapabilityVisibility.PUBLIC,
-                    role_permissions=[
-                        RolePermissionEntry(role="*", permissions=PERM_USE),
-                    ],
-                    default_permissions=PERM_USE,
-                )
+        # Internal skills - admin/system only
+        elif capability_id.startswith("skill.") and not capability_id.startswith("skill.exposed."):
+            return CapabilityAccessControl(
+                capability_id=capability_id,
+                visibility=CapabilityVisibility.PRIVATE,
+                role_permissions=[
+                    RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                    RolePermissionEntry(role="system", permissions=PERM_FULL),
+                ],
+                minimum_assurance=AssuranceLevel.HIGH,
+                default_permissions=PERM_NONE,
+            )
 
-            elif cmd_name in ["configure", "shutdown", "restart"]:
-                # Admin commands
-                return CapabilityAccessControl(
-                    capability_id=capability_id,
-                    visibility=CapabilityVisibility.ADMIN,
-                    role_permissions=[
-                        RolePermissionEntry(role="admin", permissions=PERM_FULL, minimum_assurance=AssuranceLevel.HIGH),
-                    ],
-                    minimum_assurance=AssuranceLevel.HIGH,
-                )
-
-            else:
-                # Other commands - listed for authenticated
-                return CapabilityAccessControl(
-                    capability_id=capability_id,
-                    visibility=CapabilityVisibility.LISTED,
-                    role_permissions=[
-                        RolePermissionEntry(role="admin", permissions=PERM_FULL),
-                        RolePermissionEntry(role="operator", permissions=PERM_USE),
-                        RolePermissionEntry(role="user", permissions=PERM_USE),
-                    ],
-                    default_permissions=PERM_READ_ONLY,
-                )
-
-        else:
-            # Default: listed, authenticated users can use
+        # Explicitly exposed skills - can be granted to specific roles
+        elif capability_id.startswith("exposed.skill.") or capability_id.startswith("skill.exposed."):
             return CapabilityAccessControl(
                 capability_id=capability_id,
                 visibility=CapabilityVisibility.LISTED,
                 role_permissions=[
                     RolePermissionEntry(role="admin", permissions=PERM_FULL),
-                    RolePermissionEntry(role="operator", permissions=PERM_USE),
-                    RolePermissionEntry(role="user", permissions=PERM_USE),
+                    RolePermissionEntry(role="system", permissions=PERM_FULL),
+                    # Note: specific user roles must be explicitly added
                 ],
-                default_permissions=PERM_READ_ONLY,
+                minimum_assurance=AssuranceLevel.LOW,
+                default_permissions=PERM_LIST_ONLY,  # Can see it exists, but not execute
+            )
+
+        # Explicitly exposed commands - can be granted to specific roles
+        elif capability_id.startswith("exposed.command."):
+            return CapabilityAccessControl(
+                capability_id=capability_id,
+                visibility=CapabilityVisibility.LISTED,
+                role_permissions=[
+                    RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                    RolePermissionEntry(role="system", permissions=PERM_FULL),
+                ],
+                minimum_assurance=AssuranceLevel.LOW,
+                default_permissions=PERM_LIST_ONLY,
+            )
+
+        # Explicitly exposed subagents - can be granted to specific roles
+        elif capability_id.startswith("exposed.subagent."):
+            return CapabilityAccessControl(
+                capability_id=capability_id,
+                visibility=CapabilityVisibility.LISTED,
+                role_permissions=[
+                    RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                    RolePermissionEntry(role="system", permissions=PERM_FULL),
+                ],
+                minimum_assurance=AssuranceLevel.MEDIUM,
+                default_permissions=PERM_LIST_ONLY,
+            )
+
+        # Legacy commands - selective access
+        elif capability_id.startswith("legacy.command."):
+            cmd_name = capability_id.split(".")[-1]
+
+            # Only these specific commands are public
+            if cmd_name in ["help", "about", "version"]:
+                return CapabilityAccessControl(
+                    capability_id=capability_id,
+                    visibility=CapabilityVisibility.PUBLIC,
+                    role_permissions=[
+                        RolePermissionEntry(role="*", permissions=PERM_USE),
+                    ],
+                    default_permissions=PERM_USE,
+                )
+
+            # Login/session creation is public (needed for auth flow)
+            elif cmd_name in ["login", "startSession"]:
+                return CapabilityAccessControl(
+                    capability_id=capability_id,
+                    visibility=CapabilityVisibility.PUBLIC,
+                    role_permissions=[
+                        RolePermissionEntry(role="*", permissions=PERM_USE),
+                    ],
+                    default_permissions=PERM_USE,
+                )
+
+            # All other legacy commands are admin-only by default
+            else:
+                return CapabilityAccessControl(
+                    capability_id=capability_id,
+                    visibility=CapabilityVisibility.ADMIN,
+                    role_permissions=[
+                        RolePermissionEntry(role="admin", permissions=PERM_FULL, minimum_assurance=AssuranceLevel.HIGH),
+                        RolePermissionEntry(role="system", permissions=PERM_FULL),
+                    ],
+                    minimum_assurance=AssuranceLevel.HIGH,
+                    default_permissions=PERM_NONE,
+                )
+
+        # DEFAULT: DENY - everything else is admin/system only
+        else:
+            return CapabilityAccessControl(
+                capability_id=capability_id,
+                visibility=CapabilityVisibility.PRIVATE,
+                role_permissions=[
+                    RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                    RolePermissionEntry(role="system", permissions=PERM_FULL),
+                ],
+                minimum_assurance=AssuranceLevel.HIGH,
+                default_permissions=PERM_NONE,
             )
 
 
@@ -524,10 +604,21 @@ def create_builtin_acls() -> List[CapabilityAccessControl]:
     """
     Create ACLs for built-in/implied capabilities.
 
-    These are the core capabilities that every agent has.
+    DEFAULT-DENY POLICY:
+    - Admin and System principals have full access to all capabilities
+    - All other principals are denied by default
+    - Only explicitly public capabilities (help, about, version, login) are accessible
+    - Tools, MCPs, internal skills, and open-ended chat require admin/system role
+
+    To grant access to specific capabilities for non-admin users:
+    1. Use exposed.skill.*, exposed.command.*, or exposed.subagent.* prefixes
+    2. Explicitly add role_permissions for the desired roles
     """
     return [
-        # Public commands (anyone can use)
+        # =====================================================================
+        # PUBLIC CAPABILITIES (accessible to everyone)
+        # Only essential informational and auth flow commands
+        # =====================================================================
         CapabilityAccessControl(
             capability_id="legacy.command.help",
             visibility=CapabilityVisibility.PUBLIC,
@@ -560,40 +651,49 @@ def create_builtin_acls() -> List[CapabilityAccessControl]:
             ],
             default_permissions=PERM_USE,
         ),
+        CapabilityAccessControl(
+            capability_id="core.session.create",
+            visibility=CapabilityVisibility.PUBLIC,
+            role_permissions=[
+                RolePermissionEntry(role="*", permissions=PERM_USE),
+            ],
+            default_permissions=PERM_USE,
+        ),
 
-        # Listed commands (visible to authenticated, need perms to use)
+        # =====================================================================
+        # ADMIN-ONLY COMMANDS
+        # Status, configuration, and management commands
+        # =====================================================================
         CapabilityAccessControl(
             capability_id="legacy.command.status",
-            visibility=CapabilityVisibility.LISTED,
+            visibility=CapabilityVisibility.ADMIN,
             role_permissions=[
                 RolePermissionEntry(role="admin", permissions=PERM_FULL),
-                RolePermissionEntry(role="operator", permissions=PERM_USE),
-                RolePermissionEntry(role="user", permissions=PERM_READ_ONLY),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
             ],
-            default_permissions=PERM_LIST_ONLY,
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
         ),
         CapabilityAccessControl(
             capability_id="legacy.command.listSkills",
-            visibility=CapabilityVisibility.LISTED,
+            visibility=CapabilityVisibility.ADMIN,
             role_permissions=[
                 RolePermissionEntry(role="admin", permissions=PERM_FULL),
-                RolePermissionEntry(role="operator", permissions=PERM_USE),
-                RolePermissionEntry(role="user", permissions=PERM_USE),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
             ],
-            default_permissions=PERM_LIST_ONLY,
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
         ),
         CapabilityAccessControl(
             capability_id="legacy.command.endpoints",
-            visibility=CapabilityVisibility.LISTED,
+            visibility=CapabilityVisibility.ADMIN,
             role_permissions=[
                 RolePermissionEntry(role="admin", permissions=PERM_FULL),
-                RolePermissionEntry(role="operator", permissions=PERM_USE),
-                RolePermissionEntry(role="user", permissions=PERM_READ_ONLY),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
             ],
-            default_permissions=PERM_LIST_ONLY,
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
         ),
-
-        # Admin commands
         CapabilityAccessControl(
             capability_id="legacy.command.configure",
             visibility=CapabilityVisibility.ADMIN,
@@ -601,9 +701,13 @@ def create_builtin_acls() -> List[CapabilityAccessControl]:
                 RolePermissionEntry(role="admin", permissions=PERM_FULL, minimum_assurance=AssuranceLevel.HIGH),
             ],
             minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
         ),
 
-        # Core internal capabilities
+        # =====================================================================
+        # CORE INTERNAL CAPABILITIES (admin/system only)
+        # These are the "engine" capabilities - never exposed to regular users
+        # =====================================================================
         CapabilityAccessControl(
             capability_id="core.message.handle",
             visibility=CapabilityVisibility.PRIVATE,
@@ -612,25 +716,27 @@ def create_builtin_acls() -> List[CapabilityAccessControl]:
                 RolePermissionEntry(role="system", permissions=PERM_FULL),
             ],
             minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
         ),
         CapabilityAccessControl(
             capability_id="core.llm.invoke",
             visibility=CapabilityVisibility.PRIVATE,
             role_permissions=[
                 RolePermissionEntry(role="admin", permissions=PERM_FULL),
-                RolePermissionEntry(role="operator", permissions=PERM_USE),
                 RolePermissionEntry(role="system", permissions=PERM_FULL),
             ],
-            minimum_assurance=AssuranceLevel.MEDIUM,
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
         ),
         CapabilityAccessControl(
             capability_id="core.tool.execute",
             visibility=CapabilityVisibility.PRIVATE,
             role_permissions=[
                 RolePermissionEntry(role="admin", permissions=PERM_FULL),
-                RolePermissionEntry(role="operator", permissions=PERM_USE),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
             ],
-            minimum_assurance=AssuranceLevel.MEDIUM,
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
         ),
         CapabilityAccessControl(
             capability_id="core.subagent.delegate",
@@ -640,47 +746,203 @@ def create_builtin_acls() -> List[CapabilityAccessControl]:
                 RolePermissionEntry(role="system", permissions=PERM_FULL),
             ],
             minimum_assurance=AssuranceLevel.HIGH,
-        ),
-
-        # Session management
-        CapabilityAccessControl(
-            capability_id="core.session.create",
-            visibility=CapabilityVisibility.PUBLIC,
-            role_permissions=[
-                RolePermissionEntry(role="*", permissions=PERM_USE),
-            ],
-            default_permissions=PERM_USE,
-        ),
-        CapabilityAccessControl(
-            capability_id="core.session.destroy",
-            visibility=CapabilityVisibility.LISTED,
-            role_permissions=[
-                RolePermissionEntry(role="admin", permissions=PERM_FULL),
-                RolePermissionEntry(role="operator", permissions=PERM_USE),
-                RolePermissionEntry(role="user", permissions=PERM_USE),
-            ],
             default_permissions=PERM_NONE,
         ),
 
-        # Chat capability
+        # =====================================================================
+        # SESSION MANAGEMENT (mixed access)
+        # Create is public (for auth), destroy requires auth
+        # =====================================================================
         CapabilityAccessControl(
-            capability_id="core.chat",
-            visibility=CapabilityVisibility.PUBLIC,
+            capability_id="core.session.destroy",
+            visibility=CapabilityVisibility.PRIVATE,
             role_permissions=[
                 RolePermissionEntry(role="admin", permissions=PERM_FULL),
-                RolePermissionEntry(role="operator", permissions=PERM_USE),
-                RolePermissionEntry(role="user", permissions=PERM_USE),
-                RolePermissionEntry(role="anonymous", permissions=PERM_READ_ONLY),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+                # Users can only destroy their own session (enforced at runtime)
+                RolePermissionEntry(role="user", permissions=PERM_USE, minimum_assurance=AssuranceLevel.LOW),
             ],
-            default_permissions=PERM_READ_ONLY,
+            minimum_assurance=AssuranceLevel.LOW,
+            default_permissions=PERM_NONE,
+        ),
+
+        # =====================================================================
+        # CHAT CAPABILITIES (admin/system only by default)
+        # Open-ended chat is a powerful capability - restrict by default
+        # =====================================================================
+        CapabilityAccessControl(
+            capability_id="core.chat",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
         ),
         CapabilityAccessControl(
             capability_id="core.chat.with_tools",
-            visibility=CapabilityVisibility.PROTECTED,
+            visibility=CapabilityVisibility.PRIVATE,
             role_permissions=[
                 RolePermissionEntry(role="admin", permissions=PERM_FULL),
-                RolePermissionEntry(role="operator", permissions=PERM_USE, minimum_assurance=AssuranceLevel.MEDIUM),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
             ],
-            minimum_assurance=AssuranceLevel.MEDIUM,
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+
+        # =====================================================================
+        # SDK TOOLS (admin/system only)
+        # Direct tool access is dangerous - always require admin
+        # =====================================================================
+        CapabilityAccessControl(
+            capability_id="tool.sdk.Read",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="tool.sdk.Write",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="tool.sdk.Edit",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="tool.sdk.Bash",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="tool.sdk.Glob",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="tool.sdk.Grep",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="tool.sdk.Task",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="tool.sdk.WebFetch",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="tool.sdk.WebSearch",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+
+        # =====================================================================
+        # MCP TOOLS (admin/system only)
+        # MCP server access requires admin privileges
+        # =====================================================================
+        CapabilityAccessControl(
+            capability_id="mcp.p3394_tools",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="mcp.kstar_memory",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+
+        # =====================================================================
+        # WILDCARD DEFAULTS (catch-all for unregistered capabilities)
+        # These provide fallback deny behavior
+        # =====================================================================
+        CapabilityAccessControl(
+            capability_id="tool.*",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="mcp.*",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
+        ),
+        CapabilityAccessControl(
+            capability_id="skill.*",
+            visibility=CapabilityVisibility.PRIVATE,
+            role_permissions=[
+                RolePermissionEntry(role="admin", permissions=PERM_FULL),
+                RolePermissionEntry(role="system", permissions=PERM_FULL),
+            ],
+            minimum_assurance=AssuranceLevel.HIGH,
+            default_permissions=PERM_NONE,
         ),
     ]
