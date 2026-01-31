@@ -9,14 +9,37 @@ agent:
   description: "Reference implementation of the IEEE P3394 Agent Interface Standard"
 
 # Channel configuration
+# All channels are enabled by default when running as daemon
 channels:
+  # CLI channel - interactive terminal (default for client mode)
   cli:
     enabled: true
+    default: true  # Used when no channel specified
 
+  # Unified web server - all HTTP channels on single port with different routes
+  # Routes:
+  #   /          - Web chat UI (landing, chat page)
+  #   /api/      - Web chat API endpoints
+  #   /v1/       - Anthropic API compatible endpoints (for Cherry Studio, Cursor)
+  #   /p3394/    - P3394 native protocol endpoints
   web:
     enabled: true
     host: "0.0.0.0"
     port: 8000
+    routes:
+      chat: "/"              # Web chat UI at root
+      anthropic_api: "/v1"   # Anthropic API at /v1/messages
+      p3394: "/p3394"        # P3394 protocol at /p3394/manifest, /p3394/messages
+
+  # Anthropic API settings (mounted at /v1 on web server)
+  anthropic_api:
+    enabled: true
+    # API keys for authentication (empty = no auth for testing)
+    api_keys: []
+
+  # P3394 native protocol settings (mounted at /p3394 on web server)
+  p3394:
+    enabled: true
 
   # WhatsApp channel (requires additional setup)
   whatsapp:
@@ -58,6 +81,23 @@ llm:
     2. Explain P3394 concepts clearly when asked
     3. Demonstrate capabilities rather than just describing them
     4. Be helpful, accurate, and concise
+
+# Session configuration
+sessions:
+  # Concurrency mode for multi-channel access to same session
+  #   "collaborative" - Any channel can read/write anytime (Claude/ChatGPT style)
+  #   "primary_binding" - One primary channel per session, others observe
+  mode: "collaborative"
+
+  # Settings for "primary_binding" mode (ignored in collaborative mode)
+  primary_binding:
+    allow_observers: true           # Let non-primary channels connect as read-only
+    allow_channel_switching: true   # Allow /claimSession to take over
+    require_handoff_ack: false      # Require current primary to acknowledge handoff
+
+  # Session expiration
+  default_ttl_hours: 24             # Sessions expire after this many hours
+  cleanup_interval_minutes: 60      # How often to clean up expired sessions
 
 # Storage configuration
 storage:

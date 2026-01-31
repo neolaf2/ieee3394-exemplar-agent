@@ -3,22 +3,31 @@ Agent Host Server (Daemon Mode)
 
 Runs the Agent Gateway as a background service that clients can connect to.
 Uses Unix domain socket for local IPC.
+
+Channels are configured via agent.yaml - all enabled channels start automatically.
 """
 
 import asyncio
 import json
 import logging
 import os
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Set
 
 from .core.gateway_sdk import AgentGateway
 from .core.umf import P3394Message
 from .core.storage import AgentStorage
 from .memory.kstar import KStarMemory
 from .channels.cli import CLIChannelAdapter
-from .channels.anthropic_api_server import AnthropicAPIServerAdapter
-from .channels.p3394_server import P3394ServerAdapter
+from .channels.unified_web_server import UnifiedWebServer
+
+# Import config
+try:
+    from config import load_config, AgentConfig
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from config import load_config, AgentConfig
 
 logger = logging.getLogger(__name__)
 
@@ -136,20 +145,47 @@ class AgentServer:
 async def run_daemon(
     api_key: Optional[str] = None,
     debug: bool = False,
-    agent_name: str = "ieee3394-exemplar",
-    enable_anthropic_api: bool = False,
-    anthropic_api_port: int = 8100,
-    anthropic_api_keys: Optional[set] = None,
-    enable_p3394_server: bool = True,
-    p3394_server_port: int = 8101
+    config: Optional[AgentConfig] = None,
+    # Legacy parameters (overridden by config if provided)
+    agent_name: str = "p3394-exemplar",
+    enable_anthropic_api: bool = None,
+    anthropic_api_port: int = None,
+    anthropic_api_keys: Optional[Set[str]] = None,
+    enable_p3394_server: bool = None,
+    p3394_server_port: int = None
 ):
-    """Run the agent in daemon mode"""
+    """
+    Run the agent in daemon mode.
+
+    All channels configured in agent.yaml with enabled: true will start automatically.
+    Command-line arguments can override config settings.
+    """
+    # Load config if not provided
+    if config is None:
+        config = load_config()
+
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    # Get channel configurations
+    cli_cfg = config.get_channel("cli")
+    web_cfg = config.get_channel("web")
+    anthropic_cfg = config.get_channel("anthropic_api")
+    p3394_cfg = config.get_channel("p3394")
+
+    # Apply overrides from command line (legacy support)
+    if enable_anthropic_api is not None and anthropic_cfg:
+        anthropic_cfg.enabled = enable_anthropic_api
+    if anthropic_api_port is not None and anthropic_cfg:
+        anthropic_cfg.port = anthropic_api_port
+    if enable_p3394_server is not None and p3394_cfg:
+        p3394_cfg.enabled = enable_p3394_server
+    if p3394_server_port is not None and p3394_cfg:
+        p3394_cfg.port = p3394_server_port
+
     # Initialize storage
     logger.info("Initializing agent storage...")
-    storage = AgentStorage(agent_name=agent_name)
+    storage = AgentStorage(agent_name=config.id)
     logger.info(f"Storage initialized at: {storage.base_dir}")
 
     # Configure logging to storage directory
@@ -164,9 +200,9 @@ async def run_daemon(
     logger.info("Initializing KSTAR memory...")
     kstar = KStarMemory(storage=storage)
 
-    # Initialize gateway (SDK version)
+    # Initialize gateway with config
     logger.info("Initializing Agent Gateway (SDK)...")
-    gateway = AgentGateway(memory=kstar, working_dir=storage.base_dir)
+    gateway = AgentGateway(memory=kstar, working_dir=storage.base_dir, config=config)
 
     # Load skills asynchronously
     await gateway.initialize()
@@ -176,60 +212,77 @@ async def run_daemon(
     manifest = storage.get_manifest()
     logger.info(f"Agent Manifest: {manifest.get('agent_id')} v{manifest.get('version')}")
 
-    # Create servers
+    # Create servers based on config
     servers = []
+    active_channels = []
 
-    # 1. UMF Server (for direct UMF protocol clients)
-    umf_server = AgentServer(gateway, socket_path="/tmp/ieee3394-agent.sock")
+    # Print startup banner
+    print("=" * 60)
+    print(f"  {config.name} v{config.version}")
+    print("=" * 60)
+    print(f"   Agent ID: {config.id}")
+
+    # 1. UMF Socket Server (always enabled for local IPC)
+    umf_server = AgentServer(gateway, socket_path="/tmp/p3394-agent.sock")
     servers.append(umf_server.start())
+    print(f"   UMF Socket: /tmp/p3394-agent.sock")
 
-    # 2. CLI Channel Adapter (for CLI clients)
-    cli_channel = CLIChannelAdapter(gateway, socket_path="/tmp/ieee3394-agent-cli.sock")
-    servers.append(cli_channel.start())
+    # 2. CLI Channel Adapter
+    cli_channel = None
+    if cli_cfg and cli_cfg.enabled:
+        cli_channel = CLIChannelAdapter(gateway, socket_path="/tmp/p3394-agent-cli.sock")
+        servers.append(cli_channel.start())
+        active_channels.append("cli")
+        print(f"   CLI Channel: /tmp/p3394-agent-cli.sock")
 
-    print("🚀 IEEE 3394 Agent Host starting...")
-    print(f"   Agent: {gateway.AGENT_NAME} v{gateway.AGENT_VERSION}")
-    print(f"   UMF Socket: /tmp/ieee3394-agent.sock")
-    print(f"   CLI Channel: /tmp/ieee3394-agent-cli.sock")
+    # 3. Unified Web Server (consolidates web, anthropic_api, and p3394 channels)
+    unified_web = None
+    if web_cfg and web_cfg.enabled:
+        # Get API keys from anthropic_api config if enabled
+        api_keys = None
+        if anthropic_cfg and anthropic_cfg.enabled:
+            api_keys_list = anthropic_cfg.metadata.get("api_keys", [])
+            api_keys = set(api_keys_list) if api_keys_list else (anthropic_api_keys or set())
 
-    # 3. Anthropic API Server Adapter (optional)
-    anthropic_server = None
-    if enable_anthropic_api:
-        anthropic_server = AnthropicAPIServerAdapter(
+        unified_web = UnifiedWebServer(
             gateway,
-            host="0.0.0.0",
-            port=anthropic_api_port,
-            api_keys=anthropic_api_keys
+            host=web_cfg.host,
+            port=web_cfg.port,
+            anthropic_api_keys=api_keys if api_keys else None
         )
-        servers.append(anthropic_server.start())
-        print(f"   Anthropic API: http://0.0.0.0:{anthropic_api_port}")
-        if anthropic_api_keys:
-            print(f"   API Keys: {len(anthropic_api_keys)} configured")
-        else:
-            print(f"   API Keys: None (open for testing)")
+        servers.append(unified_web.start())
 
-    # 4. P3394 Server Adapter (for P3394 agent-to-agent)
-    p3394_server = None
-    if enable_p3394_server:
-        p3394_server = P3394ServerAdapter(
-            gateway,
-            host="0.0.0.0",
-            port=p3394_server_port
-        )
-        servers.append(p3394_server.start())
-        print(f"   P3394 Agent: http://0.0.0.0:{p3394_server_port}")
-        print(f"   P3394 Address: p3394://{gateway.AGENT_ID}")
+        # Track active channels
+        active_channels.append("web")
+        print(f"\n   Unified Web Server: http://{web_cfg.host}:{web_cfg.port}")
+        print(f"   ├── Web Chat:      /chat")
+        print(f"   ├── Web API:       /api/")
 
+        if anthropic_cfg and anthropic_cfg.enabled:
+            active_channels.append("anthropic_api")
+            print(f"   ├── Anthropic:     /v1/messages")
+            if api_keys:
+                print(f"   │   └── API Keys:  {len(api_keys)} configured")
+            else:
+                print(f"   │   └── API Keys:  None (open for testing)")
+
+        if p3394_cfg and p3394_cfg.enabled:
+            active_channels.append("p3394")
+            print(f"   └── P3394:         /p3394/")
+            print(f"       └── Address:   p3394://{config.id}")
+
+    print("-" * 60)
+    print(f"   Active Channels: {', '.join(active_channels)}")
     print(f"   Press Ctrl+C to stop")
+    print("=" * 60)
 
     # Run all servers concurrently
     try:
         await asyncio.gather(*servers)
     except KeyboardInterrupt:
-        print("\n\n👋 Shutting down agent host...")
+        print("\n\n  Shutting down agent host...")
         await umf_server.stop()
-        await cli_channel.stop()
-        if anthropic_server:
-            await anthropic_server.stop()
-        if p3394_server:
-            await p3394_server.stop()
+        if cli_channel:
+            await cli_channel.stop()
+        if unified_web:
+            await unified_web.stop()

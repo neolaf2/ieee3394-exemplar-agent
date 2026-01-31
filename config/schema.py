@@ -49,6 +49,47 @@ class SkillConfig:
 
 
 @dataclass
+class PrimaryBindingConfig:
+    """Configuration for primary_binding session mode"""
+    allow_observers: bool = True           # Let non-primary channels connect as read-only
+    allow_channel_switching: bool = True   # Allow /claimSession to take over
+    require_handoff_ack: bool = False      # Require current primary to acknowledge handoff
+
+
+@dataclass
+class SessionConfig:
+    """
+    Configuration for session management and multi-channel concurrency.
+
+    Modes:
+    - "collaborative": Any channel can read/write anytime (Claude/ChatGPT style)
+                       Simple, no coordination overhead. Default for ease of use.
+
+    - "primary_binding": One primary channel per session, others observe.
+                         Explicit handoff required. Better for agent coordination.
+    """
+    # Concurrency mode
+    mode: str = "collaborative"  # "collaborative" or "primary_binding"
+
+    # Settings for primary_binding mode
+    primary_binding: PrimaryBindingConfig = field(default_factory=PrimaryBindingConfig)
+
+    # Session expiration
+    default_ttl_hours: int = 24
+    cleanup_interval_minutes: int = 60
+
+    @property
+    def is_collaborative(self) -> bool:
+        """Check if running in collaborative (simple) mode"""
+        return self.mode == "collaborative"
+
+    @property
+    def is_primary_binding(self) -> bool:
+        """Check if running in primary_binding (strict) mode"""
+        return self.mode == "primary_binding"
+
+
+@dataclass
 class AgentConfig:
     """
     Central configuration for a P3394-compliant agent.
@@ -100,6 +141,9 @@ class AgentConfig:
 
     # Storage configuration
     storage: StorageConfig = field(default_factory=StorageConfig)
+
+    # Session configuration
+    sessions: SessionConfig = field(default_factory=SessionConfig)
 
     # Skills to load
     skills: List[SkillConfig] = field(default_factory=list)
@@ -202,6 +246,20 @@ When responding:
                              if k not in ("name", "enabled")}
                 ))
 
+        # Parse session config
+        sessions_data = data.get("sessions", {})
+        primary_binding_data = sessions_data.get("primary_binding", {})
+        sessions_config = SessionConfig(
+            mode=sessions_data.get("mode", "collaborative"),
+            primary_binding=PrimaryBindingConfig(
+                allow_observers=primary_binding_data.get("allow_observers", True),
+                allow_channel_switching=primary_binding_data.get("allow_channel_switching", True),
+                require_handoff_ack=primary_binding_data.get("require_handoff_ack", False),
+            ),
+            default_ttl_hours=sessions_data.get("default_ttl_hours", 24),
+            cleanup_interval_minutes=sessions_data.get("cleanup_interval_minutes", 60),
+        )
+
         # Create config
         return cls(
             id=agent_data.get("id", "p3394-agent"),
@@ -214,6 +272,7 @@ When responding:
             },
             llm=llm_config,
             storage=storage_config,
+            sessions=sessions_config,
             skills=skills,
             working_dir=Path(data.get("working_dir", ".")),
             metadata=data.get("metadata", {}),
@@ -248,6 +307,16 @@ When responding:
                 "type": self.storage.type,
                 "path": self.storage.path,
                 **self.storage.metadata,
+            },
+            "sessions": {
+                "mode": self.sessions.mode,
+                "primary_binding": {
+                    "allow_observers": self.sessions.primary_binding.allow_observers,
+                    "allow_channel_switching": self.sessions.primary_binding.allow_channel_switching,
+                    "require_handoff_ack": self.sessions.primary_binding.require_handoff_ack,
+                },
+                "default_ttl_hours": self.sessions.default_ttl_hours,
+                "cleanup_interval_minutes": self.sessions.cleanup_interval_minutes,
             },
             "skills": [
                 {"name": s.name, "enabled": s.enabled, **s.metadata}

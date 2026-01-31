@@ -112,14 +112,24 @@ agent:
   version: "0.1.0"
   description: "Description here"
 
-# Channel configuration
+# Channel configuration (all HTTP channels on single port)
 channels:
   cli:
     enabled: true
+    default: true
   web:
     enabled: true
     host: "0.0.0.0"
     port: 8000
+    routes:
+      chat: "/"              # Web chat at root
+      anthropic_api: "/v1"   # Anthropic API
+      p3394: "/p3394"        # P3394 protocol
+  anthropic_api:
+    enabled: true
+    api_keys: []             # Empty = no auth for testing
+  p3394:
+    enabled: true
   whatsapp:
     enabled: false
     service_phone: "${WHATSAPP_PHONE}"
@@ -181,18 +191,27 @@ Skills are automatically loaded on agent startup.
 
 ## Multi-Channel Setup
 
-Enable all channels:
+All HTTP channels are served on a single port (8000 by default):
 
 ```bash
-uv run python -m p3394_agent --daemon \
-  --anthropic-api --api-port 8100 \
-  --p3394-server --p3394-port 8101
+uv run python -m p3394_agent --daemon
 ```
 
 This enables:
-- **CLI** (Unix socket) - Interactive REPL
-- **HTTP API** (port 8100) - Anthropic-compatible API
-- **P3394 Server** (port 8101) - Agent-to-agent protocol
+- **CLI** (Unix socket) - Interactive REPL at `/tmp/p3394-agent-cli.sock`
+- **Web Chat** - Browser UI at `http://localhost:8000/chat`
+- **Web API** - REST API at `http://localhost:8000/api/`
+- **Anthropic API** - Compatible API at `http://localhost:8000/v1/messages`
+- **P3394 Protocol** - Native agent protocol at `http://localhost:8000/p3394/`
+
+### Connecting with Cherry Studio or Cursor
+
+Configure your client to use:
+- **Base URL**: `http://localhost:8000`
+- **API Path**: `/v1/messages`
+- **Model**: `ieee-3394-agent`
+
+The Anthropic API is compatible with any client that supports the Claude API format.
 
 ## Troubleshooting
 
@@ -210,10 +229,12 @@ uv sync
 
 ### Port already in use
 
-Change the port in `agent.yaml` or use command line:
+Change the port in `agent.yaml`:
 
-```bash
-uv run python -m p3394_agent --daemon --p3394-port 8080
+```yaml
+channels:
+  web:
+    port: 8080  # Use a different port
 ```
 
 ## What's Happening Behind the Scenes
