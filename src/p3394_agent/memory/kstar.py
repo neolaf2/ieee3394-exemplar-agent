@@ -222,14 +222,15 @@ class KStarMemory:
         Store a principal definition.
 
         Args:
-            principal: Dict with keys: urn, display_name, roles, organization, metadata
+            principal: Dict with keys: urn OR principal_id, display_name, roles, organization, metadata
 
         Returns:
             Principal URN
         """
-        urn = principal.get("urn")
+        # Accept both 'urn' and 'principal_id' for compatibility
+        urn = principal.get("urn") or principal.get("principal_id")
         if not urn:
-            raise ValueError("Principal must have urn")
+            raise ValueError("Principal must have urn or principal_id")
 
         self.principals[urn] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),

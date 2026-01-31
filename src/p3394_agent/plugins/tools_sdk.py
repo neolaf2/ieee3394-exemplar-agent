@@ -450,17 +450,26 @@ def create_sdk_tools(gateway: "AgentGateway"):
     from .token_tools import create_token_tools
     token_tools = create_token_tools(gateway)
 
-    # Combine all tools (including ACL tools)
+    # Import and create KSTAR identity/auth tools (MCP-first architecture)
+    from .kstar_tools import create_kstar_tools
+    kstar_tools = create_kstar_tools(gateway)
+
+    # Combine all tools (including ACL tools and KSTAR tools)
     acl_tools = [list_acls_tool, get_acl_tool, store_acl_tool, list_principals_tool, get_memory_stats_tool]
-    all_tools = [query_memory_tool, store_trace_tool, list_skills_tool] + acl_tools + token_tools
+    all_tools = (
+        [query_memory_tool, store_trace_tool, list_skills_tool]
+        + acl_tools
+        + token_tools
+        + kstar_tools
+    )
 
     # Create SDK MCP server with all tools
     server = create_sdk_mcp_server(
         name="p3394_tools",
-        version="0.2.0",
+        version="0.3.0",
         tools=all_tools
     )
 
-    logger.info(f"Created P3394 SDK MCP server with {len(all_tools)} tools (including KSTAR+ control tokens)")
+    logger.info(f"Created P3394 SDK MCP server with {len(all_tools)} tools (including KSTAR+ and identity management)")
 
     return server

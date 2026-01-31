@@ -21,6 +21,7 @@ from .core.storage import AgentStorage
 from .memory.kstar import KStarMemory
 from .channels.cli import CLIChannelAdapter
 from .channels.unified_web_server import UnifiedWebServer
+from .data.repos.auth import AuthRepository
 
 # Import config
 try:
@@ -244,11 +245,15 @@ async def run_daemon(
             api_keys_list = anthropic_cfg.metadata.get("api_keys", [])
             api_keys = set(api_keys_list) if api_keys_list else (anthropic_api_keys or set())
 
+        # Create auth repo with principal registry integration
+        auth_repo = AuthRepository(principal_registry=gateway.principal_registry)
+
         unified_web = UnifiedWebServer(
             gateway,
             host=web_cfg.host,
             port=web_cfg.port,
-            anthropic_api_keys=api_keys if api_keys else None
+            anthropic_api_keys=api_keys if api_keys else None,
+            auth_repo=auth_repo
         )
         servers.append(unified_web.start())
 

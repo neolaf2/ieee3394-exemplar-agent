@@ -301,14 +301,17 @@ class AuthRepository:
 
     async def create_user(self, user: User) -> User:
         """
-        Create a user and optionally register as Principal.
+        Create a user and register as P3394 Principal.
+
+        This ensures users are always mapped to semantic principals
+        for proper P3394 identity resolution.
         """
         result = await self.users.create(user)
 
-        # Also register as P3394 Principal if registry available
+        # Register as P3394 Principal (synchronous call)
         if self.principal_registry:
             principal = user.to_principal()
-            await self.principal_registry.register(principal)
+            self.principal_registry.register_principal(principal)
 
         return result
 
