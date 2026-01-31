@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 from typing import Optional, Dict, Any, Set
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header
@@ -229,7 +229,7 @@ class P3394ServerAdapter(ChannelAdapter):
                     "websocket": f"ws://{self.host}:{self.port}/ws",
                     "health": f"http://{self.host}:{self.port}/health"
                 },
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": datetime.now(timezone.utc).isoformat() + "Z"
             }
 
         @self.app.get("/channels")

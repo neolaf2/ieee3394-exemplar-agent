@@ -15,7 +15,7 @@ Tool Categories:
 
 from claude_agent_sdk import tool
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import hashlib
 from uuid import uuid4
@@ -448,7 +448,7 @@ Examples:
             # Calculate expiry
             expires_at = None
             if args.get("expires_in_days"):
-                expires_at = datetime.utcnow() + timedelta(days=args["expires_in_days"])
+                expires_at = datetime.now(timezone.utc) + timedelta(days=args["expires_in_days"])
 
             # Hash secret if provided
             secret_hash = None
@@ -859,7 +859,7 @@ Returns a session token that can be used for subsequent requests.
             session_id = str(uuid4())
             token = f"sess_{uuid4().hex}"
             token_hash = hashlib.sha256(token.encode()).hexdigest()
-            expires_at = datetime.utcnow() + timedelta(hours=expires_in_hours)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
 
             # Store session in KSTAR memory as a control token
             if gateway.memory:
@@ -928,7 +928,7 @@ Returns the associated principal if the session is valid.
                     expires_at = binding.get("expires_at")
                     if expires_at:
                         exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-                        if datetime.utcnow() > exp_dt.replace(tzinfo=None):
+                        if datetime.now(timezone.utc) > exp_dt.replace(tzinfo=None):
                             return {
                                 "content": [{
                                     "type": "text",

@@ -401,7 +401,7 @@ class UnifiedWebServer:
             if self.anthropic_api_keys and x_api_key not in self.anthropic_api_keys:
                 raise HTTPException(status_code=401, detail="Invalid API key")
 
-            from datetime import datetime
+            from datetime import datetime, timezone
             return {
                 "object": "list",
                 "data": [
@@ -431,7 +431,7 @@ class UnifiedWebServer:
             - Anonymous: Only PUBLIC capabilities
             - Authenticated: Based on role
             """
-            from datetime import datetime
+            from datetime import datetime, timezone
             from ..core.capability_acl import CapabilityVisibility
 
             # Get or create session for visibility filtering
@@ -492,7 +492,7 @@ class UnifiedWebServer:
                 },
                 "session_id": session.id if session else None,
                 "access_level": session.client_role if session else "anonymous",
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": datetime.now(timezone.utc).isoformat() + "Z"
             }
 
         @p3394_router.get("/channels")

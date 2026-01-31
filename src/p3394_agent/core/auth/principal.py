@@ -9,7 +9,7 @@ Implements P3394's semantic principal model:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, Dict, Any
 from uuid import uuid4
@@ -62,8 +62,8 @@ class Principal:
     email: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     is_active: bool = True
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @classmethod
     def from_urn(cls, urn: str, principal_type: PrincipalType = PrincipalType.HUMAN, **kwargs) -> "Principal":
@@ -147,8 +147,8 @@ class Principal:
             email=data.get("email"),
             metadata=data.get("metadata", {}),
             is_active=data.get("is_active", True),
-            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.utcnow(),
-            updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else datetime.utcnow(),
+            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.now(timezone.utc),
+            updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else datetime.now(timezone.utc),
         )
 
 
@@ -170,7 +170,7 @@ class ClientPrincipalAssertion:
     channel_identity: str = ""                     # Channel-specific ID (phone, email, etc.)
     assurance_level: AssuranceLevel = AssuranceLevel.NONE
     authentication_method: str = ""                # How was identity verified
-    authenticated_at: datetime = field(default_factory=datetime.utcnow)
+    authenticated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Resolution state
     is_resolved: bool = False                      # Has this been resolved to Principal?
@@ -202,7 +202,7 @@ class ClientPrincipalAssertion:
             channel_identity=data.get("channel_identity", ""),
             assurance_level=AssuranceLevel(data.get("assurance_level", "none")),
             authentication_method=data.get("authentication_method", ""),
-            authenticated_at=datetime.fromisoformat(data["authenticated_at"]) if data.get("authenticated_at") else datetime.utcnow(),
+            authenticated_at=datetime.fromisoformat(data["authenticated_at"]) if data.get("authenticated_at") else datetime.now(timezone.utc),
             is_resolved=data.get("is_resolved", False),
             resolved_principal_id=data.get("resolved_principal_id"),
             metadata=data.get("metadata", {}),
@@ -241,7 +241,7 @@ class ServicePrincipalContext:
         """Check if service credentials are expired"""
         if self.expires_at is None:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
     def has_permission(self, permission: str) -> bool:
         """Check if service has a specific permission"""

@@ -7,7 +7,7 @@ Integrates with P3394 Principal identity system.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -161,7 +161,7 @@ def create_auth_router(
                 {"request": request, "title": "Verify Email", "success": False, "message": "Invalid or expired token"},
             )
 
-        if user.email_verification_expires and datetime.utcnow() > user.email_verification_expires:
+        if user.email_verification_expires and datetime.now(timezone.utc) > user.email_verification_expires:
             return templates.TemplateResponse(
                 "auth/verify_email.html",
                 {"request": request, "title": "Verify Email", "success": False, "message": "Token has expired"},
@@ -251,7 +251,7 @@ def create_auth_router(
         session = Session(
             user_id=user.id,
             token_hash=token_hash,
-            expires_at=datetime.utcnow() + timedelta(days=7),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
         await auth_repo.sessions.create(session)
 
@@ -311,7 +311,7 @@ def create_auth_router(
         if not user:
             raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-        if user.password_reset_expires and datetime.utcnow() > user.password_reset_expires:
+        if user.password_reset_expires and datetime.now(timezone.utc) > user.password_reset_expires:
             raise HTTPException(status_code=400, detail="Token has expired")
 
         # Update password
@@ -388,7 +388,7 @@ def create_auth_router(
         # Calculate expiry
         expires_at = None
         if request.expires_days:
-            expires_at = datetime.utcnow() + timedelta(days=request.expires_days)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=request.expires_days)
 
         # Create API key in auth database
         api_key = APIKey(

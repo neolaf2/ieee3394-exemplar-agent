@@ -8,7 +8,7 @@ Replaces separate handlers for commands, skills, and subagents.
 from typing import Any, Dict, Optional, Callable, TYPE_CHECKING
 import logging
 import importlib
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .capability import (
     AgentCapabilityDescriptor,
@@ -311,7 +311,7 @@ User request: {text}"""
                         "domain": "capability_invocation",
                         "actor": session.client_id or "anonymous",
                         "capability_id": capability.capability_id,
-                        "now": datetime.utcnow().isoformat()
+                        "now": datetime.now(timezone.utc).isoformat()
                     },
                     "task": {
                         "goal": f"Invoke {capability.name}"

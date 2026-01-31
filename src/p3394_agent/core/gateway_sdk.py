@@ -1158,7 +1158,7 @@ python -m p3394_agent --channel cli
         """
         from .auth.principal import AssuranceLevel
         from .auth.policy import PolicyDecision
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         # Get principal (fallback to anonymous if not set)
         if session.client_principal_id:
@@ -1318,7 +1318,7 @@ required permissions: {required_permissions}
         - Action: Authorization check
         - Result: ALLOW or DENY with reason
         """
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         try:
             trace_data = {
@@ -1331,7 +1331,7 @@ required permissions: {required_permissions}
                     "assurance_level": assurance_level.value,
                     "session_id": session.id,
                     "message_id": message.id,
-                    "timestamp": datetime.utcnow().isoformat() + "Z"
+                    "timestamp": datetime.now(timezone.utc).isoformat() + "Z"
                 },
                 "task": {
                     "goal": f"Access capability: {capability}",

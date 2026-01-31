@@ -9,7 +9,7 @@ Example:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, Dict, Any
 from uuid import uuid4
@@ -48,7 +48,7 @@ class CredentialBinding:
     public_key: Optional[str] = None               # Public key (for SSH/cert)
     metadata: Dict[str, Any] = field(default_factory=dict)
     is_active: bool = True
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_used_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
 
@@ -56,7 +56,7 @@ class CredentialBinding:
         """Check if binding is expired"""
         if self.expires_at is None:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
     def has_scope(self, scope: str) -> bool:
         """Check if binding grants a specific scope"""
@@ -64,7 +64,7 @@ class CredentialBinding:
 
     def touch(self) -> None:
         """Update last used timestamp"""
-        self.last_used_at = datetime.utcnow()
+        self.last_used_at = datetime.now(timezone.utc)
 
     def verify_secret(self, secret: str) -> bool:
         """
@@ -127,7 +127,7 @@ class CredentialBinding:
             public_key=data.get("public_key"),
             metadata=data.get("metadata", {}),
             is_active=data.get("is_active", True),
-            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.utcnow(),
+            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.now(timezone.utc),
             last_used_at=datetime.fromisoformat(data["last_used_at"]) if data.get("last_used_at") else None,
             expires_at=datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None,
         )

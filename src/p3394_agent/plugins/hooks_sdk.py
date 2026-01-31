@@ -11,7 +11,7 @@ Implements hooks for:
 
 from claude_agent_sdk import HookMatcher
 from typing import Any, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from ..memory.memory_system import MemorySystem, get_memory_system
@@ -105,7 +105,7 @@ def create_sdk_hooks(gateway: "AgentGateway") -> Dict[str, list]:
                         "domain": "p3394_agent",
                         "actor": "agent",
                         "protocol": "claude_agent_sdk",
-                        "now": datetime.utcnow().isoformat()
+                        "now": datetime.now(timezone.utc).isoformat()
                     },
                     "task": {
                         "goal": f"Execute tool: {tool_name}",
@@ -172,7 +172,7 @@ def create_sdk_hooks(gateway: "AgentGateway") -> Dict[str, list]:
                     memory_system = get_hook_memory_system()
                     await memory_system.store_token(
                         key=f"skill:activated:{skill_name}",
-                        value=f"activated:{datetime.utcnow().isoformat()}",
+                        value=f"activated:{datetime.now(timezone.utc).isoformat()}",
                         token_type=TokenType.SKILL_ID,
                         binding_target=f"skill:{skill_name}",
                         scopes=[TokenScope.EXECUTE, TokenScope.READ],
@@ -180,7 +180,7 @@ def create_sdk_hooks(gateway: "AgentGateway") -> Dict[str, list]:
                         tags=["skill", "activated", skill_name],
                         metadata={
                             "tool_name": tool_name,
-                            "activation_time": datetime.utcnow().isoformat(),
+                            "activation_time": datetime.now(timezone.utc).isoformat(),
                             "invocation_context": "post_tool"
                         }
                     )

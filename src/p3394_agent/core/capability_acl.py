@@ -15,7 +15,7 @@ Each capability declares:
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Set, Any, TYPE_CHECKING
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import json
 from pathlib import Path
@@ -103,8 +103,8 @@ class CapabilityAccessControl:
     default_permissions: Set[CapabilityPermission] = field(default_factory=set)
 
     # Metadata
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def get_permissions_for_role(
         self,
@@ -233,8 +233,8 @@ class CapabilityAccessControl:
             denied_roles=data.get("denied_roles", []),
             minimum_assurance=AssuranceLevel(data.get("minimum_assurance", "none")),
             default_permissions={CapabilityPermission(p) for p in data.get("default_permissions", [])},
-            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.utcnow(),
-            updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else datetime.utcnow(),
+            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.now(timezone.utc),
+            updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else datetime.now(timezone.utc),
         )
 
 
@@ -379,14 +379,14 @@ class CapabilityACLRegistry:
 
         Use register_async() for runtime updates.
         """
-        acl.updated_at = datetime.utcnow()
+        acl.updated_at = datetime.now(timezone.utc)
         self._acls[acl.capability_id] = acl
         self._save_to_file()
         logger.debug(f"Registered ACL for capability: {acl.capability_id}")
 
     async def register_async(self, acl: CapabilityAccessControl) -> None:
         """Register or update an ACL with memory server sync"""
-        acl.updated_at = datetime.utcnow()
+        acl.updated_at = datetime.now(timezone.utc)
         self._acls[acl.capability_id] = acl
 
         # Save to both memory and file

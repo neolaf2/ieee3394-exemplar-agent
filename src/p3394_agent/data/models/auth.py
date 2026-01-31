@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Optional, TYPE_CHECKING
 from uuid import UUID, uuid4
@@ -73,8 +73,8 @@ class User(BaseModel):
     last_login_ip: Optional[str] = None
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict = Field(default_factory=dict)
 
     @staticmethod
@@ -94,13 +94,13 @@ class User(BaseModel):
     def generate_verification_token(self) -> str:
         """Generate email verification token."""
         self.email_verification_token = secrets.token_urlsafe(32)
-        self.email_verification_expires = datetime.utcnow() + timedelta(hours=24)
+        self.email_verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
         return self.email_verification_token
 
     def generate_password_reset_token(self) -> str:
         """Generate password reset token."""
         self.password_reset_token = secrets.token_urlsafe(32)
-        self.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
+        self.password_reset_expires = datetime.now(timezone.utc) + timedelta(hours=1)
         return self.password_reset_token
 
     @property
@@ -108,7 +108,7 @@ class User(BaseModel):
         """Check if account is locked."""
         if self.locked_until is None:
             return False
-        return datetime.utcnow() < self.locked_until
+        return datetime.now(timezone.utc) < self.locked_until
 
     @property
     def principal_id(self) -> str:
@@ -175,7 +175,7 @@ class APIKey(BaseModel):
     usage_count: int = 0
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     revoked_at: Optional[datetime] = None
     metadata: dict = Field(default_factory=dict)
 
@@ -207,7 +207,7 @@ class APIKey(BaseModel):
         """Check if key is valid (active and not expired)."""
         if self.status != APIKeyStatus.ACTIVE:
             return False
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
         return True
 
@@ -240,8 +240,8 @@ class Session(BaseModel):
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
     expires_at: datetime
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    last_activity_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_activity_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @staticmethod
     def generate_token() -> tuple[str, str]:
@@ -253,7 +253,7 @@ class Session(BaseModel):
     @property
     def is_expired(self) -> bool:
         """Check if session is expired."""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
 
 class SignupRequest(BaseModel):

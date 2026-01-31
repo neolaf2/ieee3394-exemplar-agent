@@ -7,7 +7,7 @@ Integrates with P3394 Principal registry.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
 
@@ -96,7 +96,7 @@ class UserRepository(Repository[User]):
         # Lock after 5 failed attempts for 15 minutes
         if new_attempts >= 5:
             updates["locked_until"] = (
-                datetime.utcnow() + timedelta(minutes=15)
+                datetime.now(timezone.utc) + timedelta(minutes=15)
             ).isoformat()
 
         await self.update(user_id, **updates)
@@ -107,7 +107,7 @@ class UserRepository(Repository[User]):
             user_id,
             failed_login_attempts=0,
             locked_until=None,
-            last_login_at=datetime.utcnow().isoformat(),
+            last_login_at=datetime.now(timezone.utc).isoformat(),
         )
 
     async def verify_email(self, user_id: UUID) -> None:
@@ -178,7 +178,7 @@ class APIKeyRepository(Repository[APIKey]):
         return await self.update(
             key_id,
             status=APIKeyStatus.REVOKED.value,
-            revoked_at=datetime.utcnow().isoformat(),
+            revoked_at=datetime.now(timezone.utc).isoformat(),
         )
 
     async def record_usage(self, key_id: UUID) -> None:
@@ -187,7 +187,7 @@ class APIKeyRepository(Repository[APIKey]):
         if key:
             await self.update(
                 key_id,
-                last_used_at=datetime.utcnow().isoformat(),
+                last_used_at=datetime.now(timezone.utc).isoformat(),
                 usage_count=key.usage_count + 1,
             )
 
@@ -238,7 +238,7 @@ class SessionRepository(Repository[Session]):
 
     async def delete_expired(self) -> int:
         """Delete all expired sessions. Returns count deleted."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if self.client:
             response = (
                 self.client.table(self.table_name)
@@ -280,7 +280,7 @@ class SessionRepository(Repository[Session]):
         """Update last activity timestamp."""
         await self.update(
             session_id,
-            last_activity_at=datetime.utcnow().isoformat(),
+            last_activity_at=datetime.now(timezone.utc).isoformat(),
         )
 
 

@@ -12,7 +12,7 @@ Example:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 import json
 import logging
@@ -38,7 +38,7 @@ class ServiceCredential:
     expires_at: Optional[datetime] = None
     metadata: Dict = field(default_factory=dict)
     is_active: bool = True
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_rotated_at: Optional[datetime] = None
 
     def to_dict(self) -> dict:
@@ -64,7 +64,7 @@ class ServiceCredential:
             expires_at=datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None,
             metadata=data.get("metadata", {}),
             is_active=data.get("is_active", True),
-            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.utcnow(),
+            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.now(timezone.utc),
             last_rotated_at=datetime.fromisoformat(data["last_rotated_at"]) if data.get("last_rotated_at") else None
         )
 
@@ -116,8 +116,8 @@ class ServicePrincipal:
     channels: Dict[str, ChannelConfiguration] = field(default_factory=dict)
     metadata: Dict = field(default_factory=dict)
     is_active: bool = True
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict:
         return {
@@ -140,8 +140,8 @@ class ServicePrincipal:
             channels={k: ChannelConfiguration.from_dict(v) for k, v in data.get("channels", {}).items()},
             metadata=data.get("metadata", {}),
             is_active=data.get("is_active", True),
-            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.utcnow(),
-            updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else datetime.utcnow()
+            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.now(timezone.utc),
+            updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else datetime.now(timezone.utc)
         )
 
     def get_channel_endpoint(self, channel_id: str) -> Optional[str]:
@@ -158,7 +158,7 @@ class ServicePrincipal:
             metadata=metadata or {},
             is_active=True
         )
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
 
 class ServicePrincipalRegistry:
@@ -284,7 +284,7 @@ class ServicePrincipalRegistry:
             return None
 
         # Check expiration
-        if cred.expires_at and datetime.utcnow() > cred.expires_at:
+        if cred.expires_at and datetime.now(timezone.utc) > cred.expires_at:
             logger.warning(f"Credential {credential_id} has expired")
             return None
 
