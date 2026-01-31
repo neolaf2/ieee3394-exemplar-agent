@@ -184,9 +184,17 @@ class AgentGateway:
                 "Read", "Write", "Edit", "Bash", "Glob", "Grep",
                 "WebSearch", "WebFetch", "Task",
                 # Custom P3394 tools (via SDK MCP)
+                # KSTAR Memory (episodic, declarative, procedural)
                 "mcp__p3394_tools__query_memory",
                 "mcp__p3394_tools__store_trace",
                 "mcp__p3394_tools__list_skills",
+                # KSTAR+ Control Tokens (the 4th memory class - authority to execute)
+                "mcp__p3394_tools__store_control_token",
+                "mcp__p3394_tools__get_control_token",
+                "mcp__p3394_tools__verify_control_token",
+                "mcp__p3394_tools__revoke_control_token",
+                "mcp__p3394_tools__get_token_lineage",
+                "mcp__p3394_tools__list_tokens_by_type",
             ],
             hooks=create_sdk_hooks(self),
             mcp_servers={

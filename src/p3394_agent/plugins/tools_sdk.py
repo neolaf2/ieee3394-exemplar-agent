@@ -2,7 +2,8 @@
 Claude Agent SDK Custom Tools for P3394 Agent
 
 Implements custom tools as in-process MCP servers:
-- KSTAR memory operations
+- KSTAR memory operations (traces, perceptions, skills)
+- KSTAR+ control tokens (the 4th memory class)
 - P3394 agent discovery
 - Skill management
 """
@@ -192,13 +193,20 @@ def create_sdk_tools(gateway: "AgentGateway"):
                 "isError": True
             }
 
-    # Create SDK MCP server with these tools
+    # Import and create token tools
+    from .token_tools import create_token_tools
+    token_tools = create_token_tools(gateway)
+
+    # Combine all tools
+    all_tools = [query_memory_tool, store_trace_tool, list_skills_tool] + token_tools
+
+    # Create SDK MCP server with all tools
     server = create_sdk_mcp_server(
         name="p3394_tools",
-        version="0.1.0",
-        tools=[query_memory_tool, store_trace_tool, list_skills_tool]
+        version="0.2.0",
+        tools=all_tools
     )
 
-    logger.info("Created P3394 SDK MCP server with 3 custom tools")
+    logger.info(f"Created P3394 SDK MCP server with {len(all_tools)} tools (including KSTAR+ control tokens)")
 
     return server
