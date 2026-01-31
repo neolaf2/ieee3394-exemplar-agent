@@ -276,7 +276,9 @@ class UnifiedWebServer:
         @api_router.get("/catalog")
         async def api_catalog(
             type_filter: Optional[str] = None,
-            source_filter: Optional[str] = None
+            source_filter: Optional[str] = None,
+            power_level: Optional[str] = None,
+            safe_for_client: bool = False
         ):
             """
             Get the capability catalog (system truth).
@@ -292,14 +294,22 @@ class UnifiedWebServer:
             Args:
                 type_filter: Filter by type (command, skill, subagent, tool, etc.)
                 source_filter: Filter by source (builtin, sdk, skill, config, etc.)
+                power_level: Filter by power level (standard, meta, self_modifying, bootstrap)
+                safe_for_client: If true, only return capabilities safe for client principals
             """
-            entries = self.gateway.capability_catalog.list_all()
+            # Get entries based on safe_for_client flag
+            if safe_for_client:
+                entries = self.gateway.capability_catalog.list_safe_for_client()
+            else:
+                entries = self.gateway.capability_catalog.list_all()
 
             # Apply filters
             if type_filter:
                 entries = [e for e in entries if e.type.value == type_filter]
             if source_filter:
                 entries = [e for e in entries if e.source.value == source_filter]
+            if power_level:
+                entries = [e for e in entries if e.power_level.value == power_level]
 
             return {
                 "stats": self.gateway.capability_catalog.get_stats(),
@@ -312,6 +322,7 @@ class UnifiedWebServer:
                         "source": e.source.value,
                         "description": e.description,
                         "enabled": e.enabled,
+                        "power_level": e.power_level.value,
                         "in_memory": e.in_memory,
                         "in_system": e.in_system,
                     }

@@ -66,6 +66,79 @@ class CapabilityType(str, Enum):
     CORE = "core"                 # Core internal capability
 
 
+class CapabilityPowerLevel(str, Enum):
+    """
+    Power level taxonomy for capabilities.
+
+    This distinguishes capabilities by their potential impact on the agent:
+    - STANDARD: Isolated task execution, safe for all users
+    - META: Can invoke other capabilities recursively
+    - SELF_MODIFYING: Can modify agent state, memory, or capabilities
+    - BOOTSTRAP: Essential for agent factory/replication
+
+    Security implications:
+    - Anonymous users: STANDARD only (public capabilities)
+    - Client principals: STANDARD only (no agent mutation)
+    - Service principal: STANDARD + META + controlled SELF_MODIFYING
+    - Admin/System: All levels
+    """
+    STANDARD = "standard"           # Level 0: Task-specific, isolated
+    META = "meta"                   # Level 1: Can invoke other skills/capabilities
+    SELF_MODIFYING = "self_modifying"  # Level 2: Can modify agent state/memory/skills
+    BOOTSTRAP = "bootstrap"         # Level 3: Factory-essential, system-level
+
+
+# Classification of known capabilities by power level
+POWER_LEVEL_CLASSIFICATIONS = {
+    # BOOTSTRAP level - SDK and factory essentials
+    CapabilityPowerLevel.BOOTSTRAP: {
+        "tool.sdk.read", "tool.sdk.write", "tool.sdk.edit", "tool.sdk.bash",
+        "tool.sdk.glob", "tool.sdk.grep", "tool.sdk.task",
+        "core.llm.invoke", "core.session.create", "core.session.destroy",
+    },
+    # SELF_MODIFYING level - Can mutate agent
+    CapabilityPowerLevel.SELF_MODIFYING: {
+        "skill.skill-creator", "skill.skill-creation-guide", "skill.skill-evolution",
+        "skill.skill-management", "skill.skill-transfer",
+        "skill.control-tokens",  # KSTAR+ control tokens
+        "skill.agent-development", "skill.Hook Development",
+        "command.configure",
+        "admin.principal_manage", "admin.acl_manage", "admin.channel_manage",
+    },
+    # META level - Can invoke other capabilities
+    CapabilityPowerLevel.META: {
+        "tool.sdk.task",  # Subagent delegation
+        "skill.skill-discovery",
+        "skill.agent-sdk-basics", "skill.agent-sdk-advanced",
+        "skill.research-lookup", "skill.scientific-writing", "skill.scientific-brainstorming",
+        "skill.ieee-wg-manager",
+        "core.chat.with_tools", "core.skill_dispatch", "core.subagent_dispatch",
+    },
+    # STANDARD is the default for everything else
+}
+
+
+def classify_power_level(capability_id: str) -> CapabilityPowerLevel:
+    """
+    Classify a capability's power level based on its ID.
+
+    Checks against known classifications, defaults to STANDARD.
+    """
+    for level, ids in POWER_LEVEL_CLASSIFICATIONS.items():
+        if capability_id in ids:
+            return level
+
+    # Check patterns
+    if capability_id.startswith("admin."):
+        return CapabilityPowerLevel.SELF_MODIFYING
+    if "skill-creator" in capability_id or "skill-evolution" in capability_id:
+        return CapabilityPowerLevel.SELF_MODIFYING
+    if "control-token" in capability_id:
+        return CapabilityPowerLevel.SELF_MODIFYING
+
+    return CapabilityPowerLevel.STANDARD
+
+
 @dataclass
 class CatalogEntry:
     """Entry in the capability catalog"""
@@ -76,6 +149,9 @@ class CatalogEntry:
     description: str = ""                      # Description
     version: str = "1.0.0"                     # Version
     enabled: bool = True                       # Is it enabled?
+
+    # Power level classification
+    power_level: CapabilityPowerLevel = CapabilityPowerLevel.STANDARD
 
     # Source location
     source_path: Optional[str] = None          # File path if applicable
@@ -92,6 +168,12 @@ class CatalogEntry:
     in_memory: bool = False                    # Is it in long-term memory?
     in_system: bool = True                     # Is it in the system?
 
+    def __post_init__(self):
+        """Auto-classify power level if not explicitly set"""
+        if self.power_level == CapabilityPowerLevel.STANDARD:
+            # Check if this capability should have a higher power level
+            self.power_level = classify_power_level(self.id)
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary"""
         return {
@@ -102,6 +184,7 @@ class CatalogEntry:
             "description": self.description,
             "version": self.version,
             "enabled": self.enabled,
+            "power_level": self.power_level.value,
             "source_path": self.source_path,
             "source_module": self.source_module,
             "metadata": self.metadata,
@@ -114,6 +197,14 @@ class CatalogEntry:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CatalogEntry":
         """Deserialize from dictionary"""
+        # Parse power level, defaulting to STANDARD
+        power_level = CapabilityPowerLevel.STANDARD
+        if data.get("power_level"):
+            try:
+                power_level = CapabilityPowerLevel(data["power_level"])
+            except ValueError:
+                pass
+
         return cls(
             id=data["id"],
             name=data["name"],
@@ -122,6 +213,7 @@ class CatalogEntry:
             description=data.get("description", ""),
             version=data.get("version", "1.0.0"),
             enabled=data.get("enabled", True),
+            power_level=power_level,
             source_path=data.get("source_path"),
             source_module=data.get("source_module"),
             metadata=data.get("metadata", {}),
@@ -607,14 +699,51 @@ class CapabilityCatalog:
         """List entries that are out of sync between system and memory"""
         return [e for e in self._entries.values() if e.in_memory != e.in_system]
 
+    def list_by_power_level(self, power_level: CapabilityPowerLevel) -> List[CatalogEntry]:
+        """
+        List entries by power level.
+
+        Power levels:
+        - STANDARD: Safe for all users, isolated task execution
+        - META: Can invoke other capabilities, requires auth
+        - SELF_MODIFYING: Can modify agent state, service principal/admin only
+        - BOOTSTRAP: Factory essentials, system-level only
+        """
+        return [e for e in self._entries.values() if e.power_level == power_level]
+
+    def list_safe_for_client(self) -> List[CatalogEntry]:
+        """
+        List capabilities safe for client principals (external users).
+
+        These are STANDARD level capabilities that cannot modify agent state.
+        """
+        return [
+            e for e in self._entries.values()
+            if e.power_level == CapabilityPowerLevel.STANDARD and e.enabled
+        ]
+
+    def list_meta_skills(self) -> List[CatalogEntry]:
+        """List meta-skills that can invoke other capabilities"""
+        return self.list_by_power_level(CapabilityPowerLevel.META)
+
+    def list_self_modifying(self) -> List[CatalogEntry]:
+        """List self-modifying capabilities (can mutate agent state)"""
+        return self.list_by_power_level(CapabilityPowerLevel.SELF_MODIFYING)
+
+    def list_bootstrap_essential(self) -> List[CatalogEntry]:
+        """List bootstrap-essential capabilities for agent factory"""
+        return self.list_by_power_level(CapabilityPowerLevel.BOOTSTRAP)
+
     def get_stats(self) -> Dict[str, Any]:
         """Get catalog statistics"""
         by_type = {}
         by_source = {}
+        by_power_level = {}
 
         for entry in self._entries.values():
             by_type[entry.type.value] = by_type.get(entry.type.value, 0) + 1
             by_source[entry.source.value] = by_source.get(entry.source.value, 0) + 1
+            by_power_level[entry.power_level.value] = by_power_level.get(entry.power_level.value, 0) + 1
 
         in_both = sum(1 for e in self._entries.values() if e.in_memory and e.in_system)
         only_system = sum(1 for e in self._entries.values() if e.in_system and not e.in_memory)
@@ -624,6 +753,7 @@ class CapabilityCatalog:
             "total": len(self._entries),
             "by_type": by_type,
             "by_source": by_source,
+            "by_power_level": by_power_level,
             "enabled": sum(1 for e in self._entries.values() if e.enabled),
             "sync_status": {
                 "in_both": in_both,

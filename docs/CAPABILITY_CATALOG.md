@@ -58,6 +58,44 @@ The P3394 Agent maintains a **Capability Catalog** - a unified view of all agent
 | `config` | From `agent.yaml` |
 | `learned` | Agent learned/created |
 
+### Capability Power Levels
+
+Power levels classify capabilities by their potential impact on the agent:
+
+| Level | Description | Security |
+|-------|-------------|----------|
+| `standard` | Isolated task execution, safe for all users | Anonymous, Client, Service, Admin |
+| `meta` | Can invoke other capabilities recursively | Service, Admin |
+| `self_modifying` | Can modify agent state, memory, or capabilities | Admin only |
+| `bootstrap` | Factory-essential, system-level capabilities | System/Factory only |
+
+#### Power Level Classification
+
+```python
+# BOOTSTRAP level - SDK and factory essentials
+"tool.sdk.read", "tool.sdk.write", "tool.sdk.bash", "tool.sdk.task"
+"core.llm.invoke", "core.session.create", "core.session.destroy"
+
+# SELF_MODIFYING level - Can mutate agent
+"skill.skill-creator", "skill.skill-evolution", "skill.skill-management"
+"skill.control-tokens"  # KSTAR+ control tokens
+"admin.principal_manage", "admin.acl_manage", "admin.channel_manage"
+
+# META level - Can invoke other capabilities
+"skill.skill-discovery"
+"skill.agent-sdk-basics", "skill.agent-sdk-advanced"
+"core.chat.with_tools", "core.skill_dispatch", "core.subagent_dispatch"
+
+# STANDARD level - Everything else (task-specific, isolated)
+```
+
+#### Security Implications
+
+- **Anonymous users**: STANDARD only (public capabilities)
+- **Client principals**: STANDARD only (no agent mutation)
+- **Service principals**: STANDARD + META + controlled SELF_MODIFYING
+- **Admin/System**: All levels
+
 ## Discovery Process
 
 ### Startup Discovery
@@ -117,10 +155,13 @@ class CatalogEntry:
     description: str           # Human-readable description
     version: str               # Capability version
     enabled: bool              # Is it enabled?
+    power_level: PowerLevel    # standard, meta, self_modifying, bootstrap
     source_path: str           # File path if applicable
     in_memory: bool            # Synced to KSTAR memory?
     in_system: bool            # Found in system?
 ```
+
+Power levels are auto-classified based on capability ID when not explicitly set.
 
 ## API Reference
 
@@ -135,6 +176,15 @@ GET /api/catalog?type_filter=skill
 
 # Filter by source
 GET /api/catalog?source_filter=builtin
+
+# Filter by power level
+GET /api/catalog?power_level=standard
+
+# Get only client-safe capabilities (STANDARD level only)
+GET /api/catalog?safe_for_client=true
+
+# Combine filters
+GET /api/catalog?type_filter=skill&power_level=meta
 
 # Get catalog manifest
 GET /api/catalog/manifest
@@ -158,6 +208,12 @@ GET /api/catalog/manifest
             "skill": 28,
             "sdk": 9
         },
+        "by_power_level": {
+            "standard": 45,
+            "meta": 5,
+            "self_modifying": 3,
+            "bootstrap": 0
+        },
         "enabled": 53,
         "sync_status": {
             "in_both": 53,
@@ -174,6 +230,7 @@ GET /api/catalog/manifest
             "source": "builtin",
             "description": "Show available commands and capabilities",
             "enabled": true,
+            "power_level": "standard",
             "in_memory": true,
             "in_system": true
         }
