@@ -319,8 +319,30 @@ Binding saves authentication data securely:
 - **Service Principals** - `~/.ieee3394/service_principals/{client_id}.json`
 - **Channel Configs** - `~/.ieee3394/{channel}_config.json`
 - **Auth Sessions** - Bridge-specific (e.g., `whatsapp_bridge/whatsapp_auth/`)
+- **Credential Bindings** - `.claude/principals/credential_bindings.json`
 
 All files created with secure permissions (600).
+
+### API Key Credential Bindings
+
+Web-generated API keys are automatically registered as credential bindings:
+
+```python
+# When API key is created via /auth/api/keys:
+binding = CredentialBinding(
+    binding_id="urn:cred:api_key:{key_prefix}",
+    principal_id=user.principal_id,
+    channel="api",
+    binding_type=BindingType.API_KEY,
+    external_subject=key_prefix,
+    scopes=["read", "write"],
+)
+```
+
+This enables:
+- API key → principal resolution
+- Unified audit trail
+- Scoped permissions per key
 
 ## Error Handling
 

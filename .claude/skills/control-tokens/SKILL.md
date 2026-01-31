@@ -119,6 +119,52 @@ Parameters:
 | Human Identity | phone, email, biometric, badge |
 | Agentic | function_ptr, agent_uri, channel_binding |
 
+## Principal Binding
+
+Control Tokens now support **principal binding** - linking tokens to the semantic identity that owns them.
+
+### Fields
+
+```python
+principal_id: Optional[str]           # Primary owner URN
+authorized_principals: List[str]      # Additional authorized principals
+```
+
+### Authorization Check
+
+```python
+def is_authorized_principal(self, principal_id: str) -> bool:
+    # No restriction = anyone with value can use
+    if self.principal_id is None and not self.authorized_principals:
+        return True
+    # Owner or in authorized list
+    return (self.principal_id == principal_id or
+            principal_id in self.authorized_principals)
+```
+
+### Use Cases
+
+1. **API Key Ownership**: Track who created each API key
+2. **Delegation**: Allow multiple principals to use the same token
+3. **Audit**: Trace token usage back to principals
+4. **Revocation**: Revoke all tokens owned by a principal
+
+### Example: API Key with Principal
+
+```
+"Store API key with principal binding"
+
+→ store_control_token(
+    key="api_key:p3394_abc123",
+    value="sk-xxxx",
+    token_type="api_key",
+    binding_target="p3394_agent:api",
+    scopes=["read", "write"],
+    principal_id="urn:principal:org:ieee3394:role:user:person:alice",
+    authorized_principals=["urn:principal:org:ieee3394:role:user:person:alice"]
+  )
+```
+
 ## Examples
 
 ### Store an API Key
