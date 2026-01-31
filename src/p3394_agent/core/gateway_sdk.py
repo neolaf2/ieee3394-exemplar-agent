@@ -123,8 +123,10 @@ class AgentGateway:
         )
 
         # NEW: Capability Access Control
+        # ACL registry uses memory as primary storage (swappable), file as fallback
         self.acl_registry = CapabilityACLRegistry(
-            storage_path=self.working_dir / ".claude" / "capability_acls.json"
+            storage_path=self.working_dir / ".claude" / "capability_acls.json",
+            memory=memory  # Connect to memory server for persistent, swappable config
         )
         self.access_manager = CapabilityAccessManager(
             acl_registry=self.acl_registry,
@@ -158,6 +160,13 @@ class AgentGateway:
         Initialize async components (load skills, migrate to capabilities).
         Call this after creating the gateway.
         """
+        # Initialize ACL registry from memory server (or fallback to file)
+        logger.info("Initializing capability ACLs from memory server...")
+        await self.acl_registry.initialize()
+
+        # Bootstrap built-in ACLs if not already in memory
+        await self._bootstrap_builtin_acls()
+
         # Load skills from .claude/skills/
         logger.info("Loading skills from .claude/skills/...")
         self.skills = await self.skill_loader.load_all_skills()
@@ -175,6 +184,42 @@ class AgentGateway:
             logger.info(f"Loaded {count} built-in capabilities from {builtin_caps_dir}")
 
         logger.info(f"Capability registry initialized with {self.capability_registry.count()} capabilities")
+
+    async def _bootstrap_builtin_acls(self):
+        """
+        Bootstrap built-in ACLs, principals, and credential bindings.
+
+        Uses the BootstrapManager to load configuration from:
+        1. Default in-code config
+        2. config/bootstrap_acl.json
+        3. Environment-specified config (P3394_BOOTSTRAP_CONFIG)
+
+        This enables swappable memory servers with different capability sets.
+        """
+        from .bootstrap import BootstrapManager
+        from .capability_acl import create_builtin_acls
+
+        # Load bootstrap data (principals, bindings) into memory
+        bootstrap_mgr = BootstrapManager(self.memory, self.working_dir)
+        bootstrap_results = await bootstrap_mgr.load_all()
+
+        # Check if ACL registry already has entries (from memory)
+        existing_count = len(self.acl_registry.list_all())
+        if existing_count > 0:
+            logger.info(f"ACL registry already has {existing_count} ACLs from memory")
+            return
+
+        # Register built-in ACLs if none loaded from memory
+        builtin_acls = create_builtin_acls()
+        for acl in builtin_acls:
+            self.acl_registry.register(acl)
+
+        logger.info(f"Bootstrapped {len(builtin_acls)} built-in capability ACLs")
+
+        # Sync to memory server if available
+        if self.memory:
+            synced = await self.acl_registry.sync_to_memory()
+            logger.info(f"Synced {synced} ACLs to memory server")
 
     def get_sdk_options(self) -> ClaudeAgentOptions:
         """

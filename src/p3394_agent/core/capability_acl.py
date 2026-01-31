@@ -14,13 +14,16 @@ Each capability declares:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Set, Any
+from typing import Dict, List, Optional, Set, Any, TYPE_CHECKING
 from datetime import datetime
 import logging
 import json
 from pathlib import Path
 
 from .auth.principal import AssuranceLevel
+
+if TYPE_CHECKING:
+    from ..memory.kstar import KStarMemory
 
 logger = logging.getLogger(__name__)
 
@@ -240,23 +243,68 @@ class CapabilityACLRegistry:
     Registry for Capability Access Control Lists.
 
     Manages ACL storage, lookup, and default ACL generation.
+
+    Supports two storage backends:
+    1. Memory server (KStarMemory) - primary, swappable, for dynamic configs
+    2. Local JSON file - fallback for persistence
     """
 
-    def __init__(self, storage_path: Optional[Path] = None):
+    def __init__(
+        self,
+        storage_path: Optional[Path] = None,
+        memory: Optional["KStarMemory"] = None
+    ):
         """
         Initialize ACL registry.
 
         Args:
-            storage_path: Path to ACL storage file (JSON)
+            storage_path: Path to ACL storage file (JSON) - fallback storage
+            memory: KStarMemory instance for primary storage
         """
         self._acls: Dict[str, CapabilityAccessControl] = {}
         self._storage_path = storage_path
+        self._memory = memory
+        self._initialized = False
 
-        if storage_path and storage_path.exists():
-            self._load()
+    def set_memory(self, memory: "KStarMemory") -> None:
+        """Set the memory backend (for delayed initialization)"""
+        self._memory = memory
 
-    def _load(self) -> None:
-        """Load ACLs from disk"""
+    async def initialize(self) -> None:
+        """
+        Initialize ACLs from storage.
+
+        Loads from memory server first, then falls back to local file.
+        """
+        if self._initialized:
+            return
+
+        # Try loading from memory server first
+        if self._memory:
+            await self._load_from_memory()
+
+        # If no ACLs from memory, try local file
+        if not self._acls and self._storage_path and self._storage_path.exists():
+            self._load_from_file()
+
+        self._initialized = True
+
+    async def _load_from_memory(self) -> None:
+        """Load ACLs from memory server"""
+        try:
+            acl_dicts = await self._memory.list_acls()
+
+            for acl_data in acl_dicts:
+                acl = CapabilityAccessControl.from_dict(acl_data)
+                self._acls[acl.capability_id] = acl
+
+            if self._acls:
+                logger.info(f"Loaded {len(self._acls)} capability ACLs from memory server")
+        except Exception as e:
+            logger.warning(f"Failed to load ACLs from memory server: {e}")
+
+    def _load_from_file(self) -> None:
+        """Load ACLs from local JSON file (fallback)"""
         if not self._storage_path or not self._storage_path.exists():
             return
 
@@ -268,12 +316,22 @@ class CapabilityACLRegistry:
                 acl = CapabilityAccessControl.from_dict(acl_data)
                 self._acls[acl.capability_id] = acl
 
-            logger.info(f"Loaded {len(self._acls)} capability ACLs")
+            logger.info(f"Loaded {len(self._acls)} capability ACLs from file")
         except Exception as e:
-            logger.error(f"Failed to load capability ACLs: {e}")
+            logger.error(f"Failed to load capability ACLs from file: {e}")
 
-    def _save(self) -> None:
-        """Save ACLs to disk"""
+    async def _save_to_memory(self, acl: CapabilityAccessControl) -> None:
+        """Save ACL to memory server"""
+        if not self._memory:
+            return
+
+        try:
+            await self._memory.store_acl(acl.to_dict())
+        except Exception as e:
+            logger.warning(f"Failed to save ACL to memory server: {e}")
+
+    def _save_to_file(self) -> None:
+        """Save ACLs to local JSON file (fallback)"""
         if not self._storage_path:
             return
 
@@ -287,15 +345,53 @@ class CapabilityACLRegistry:
             with open(self._storage_path, "w") as f:
                 json.dump(data, f, indent=2)
 
-            logger.debug(f"Saved {len(self._acls)} capability ACLs")
+            logger.debug(f"Saved {len(self._acls)} capability ACLs to file")
         except Exception as e:
-            logger.error(f"Failed to save capability ACLs: {e}")
+            logger.error(f"Failed to save capability ACLs to file: {e}")
+
+    async def sync_to_memory(self) -> int:
+        """
+        Sync all local ACLs to memory server.
+
+        Useful for bootstrapping or migration.
+
+        Returns:
+            Number of ACLs synced
+        """
+        if not self._memory:
+            logger.warning("No memory server configured for ACL sync")
+            return 0
+
+        count = 0
+        for acl in self._acls.values():
+            try:
+                await self._memory.store_acl(acl.to_dict())
+                count += 1
+            except Exception as e:
+                logger.warning(f"Failed to sync ACL {acl.capability_id}: {e}")
+
+        logger.info(f"Synced {count} ACLs to memory server")
+        return count
 
     def register(self, acl: CapabilityAccessControl) -> None:
-        """Register or update an ACL"""
+        """
+        Register or update an ACL (sync version for initialization).
+
+        Use register_async() for runtime updates.
+        """
         acl.updated_at = datetime.utcnow()
         self._acls[acl.capability_id] = acl
-        self._save()
+        self._save_to_file()
+        logger.debug(f"Registered ACL for capability: {acl.capability_id}")
+
+    async def register_async(self, acl: CapabilityAccessControl) -> None:
+        """Register or update an ACL with memory server sync"""
+        acl.updated_at = datetime.utcnow()
+        self._acls[acl.capability_id] = acl
+
+        # Save to both memory and file
+        await self._save_to_memory(acl)
+        self._save_to_file()
         logger.debug(f"Registered ACL for capability: {acl.capability_id}")
 
     def get(self, capability_id: str) -> Optional[CapabilityAccessControl]:
@@ -311,10 +407,23 @@ class CapabilityACLRegistry:
         return self._create_default_acl(capability_id)
 
     def delete(self, capability_id: str) -> None:
-        """Delete an ACL"""
+        """Delete an ACL (sync version)"""
         if capability_id in self._acls:
             del self._acls[capability_id]
-            self._save()
+            self._save_to_file()
+
+    async def delete_async(self, capability_id: str) -> None:
+        """Delete an ACL with memory server sync"""
+        if capability_id in self._acls:
+            del self._acls[capability_id]
+            self._save_to_file()
+
+            # Also delete from memory if available
+            if self._memory:
+                try:
+                    await self._memory.delete_acl(capability_id)
+                except Exception as e:
+                    logger.warning(f"Failed to delete ACL from memory: {e}")
 
     def list_all(self) -> List[CapabilityAccessControl]:
         """List all ACLs"""

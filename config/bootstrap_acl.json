@@ -1,0 +1,191 @@
+{
+  "_description": "Bootstrap configuration for KSTAR memory server - preloaded at agent startup",
+  "_version": "1.0.0",
+
+  "principals": [
+    {
+      "urn": "urn:principal:system:admin",
+      "display_name": "System Administrator",
+      "roles": ["admin", "system"],
+      "organization": "system",
+      "metadata": {
+        "description": "Built-in admin principal for system operations"
+      }
+    },
+    {
+      "urn": "urn:principal:system:anonymous",
+      "display_name": "Anonymous User",
+      "roles": ["anonymous"],
+      "organization": "public",
+      "metadata": {
+        "description": "Default principal for unauthenticated access"
+      }
+    },
+    {
+      "urn": "urn:principal:channel:cli:owner",
+      "display_name": "CLI Owner",
+      "roles": ["admin", "operator", "user"],
+      "organization": "local",
+      "metadata": {
+        "description": "Owner accessing via CLI channel (highest trust)"
+      }
+    }
+  ],
+
+  "credential_bindings": [
+    {
+      "credential_type": "channel:cli:owner",
+      "credential_value": "self",
+      "principal_urn": "urn:principal:channel:cli:owner",
+      "assurance_level": "cryptographic"
+    },
+    {
+      "credential_type": "api_key",
+      "credential_value": "admin-key-placeholder",
+      "principal_urn": "urn:principal:system:admin",
+      "assurance_level": "medium"
+    }
+  ],
+
+  "acls": [
+    {
+      "capability_id": "legacy.command.help",
+      "visibility": "public",
+      "default_permissions": ["list", "read", "execute"],
+      "role_permissions": [
+        {"role": "*", "permissions": ["list", "read", "execute"], "minimum_assurance": "none"}
+      ]
+    },
+    {
+      "capability_id": "legacy.command.about",
+      "visibility": "public",
+      "default_permissions": ["list", "read", "execute"],
+      "role_permissions": [
+        {"role": "*", "permissions": ["list", "read", "execute"], "minimum_assurance": "none"}
+      ]
+    },
+    {
+      "capability_id": "legacy.command.version",
+      "visibility": "public",
+      "default_permissions": ["list", "read", "execute"],
+      "role_permissions": [
+        {"role": "*", "permissions": ["list", "read", "execute"], "minimum_assurance": "none"}
+      ]
+    },
+    {
+      "capability_id": "legacy.command.login",
+      "visibility": "public",
+      "default_permissions": ["list", "read", "execute"],
+      "role_permissions": [
+        {"role": "*", "permissions": ["list", "read", "execute"], "minimum_assurance": "none"}
+      ]
+    },
+    {
+      "capability_id": "legacy.command.status",
+      "visibility": "listed",
+      "default_permissions": ["list"],
+      "role_permissions": [
+        {"role": "admin", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "none"},
+        {"role": "operator", "permissions": ["list", "read", "execute"], "minimum_assurance": "low"},
+        {"role": "user", "permissions": ["list", "read"], "minimum_assurance": "low"}
+      ]
+    },
+    {
+      "capability_id": "legacy.command.listSkills",
+      "visibility": "listed",
+      "default_permissions": ["list"],
+      "role_permissions": [
+        {"role": "admin", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "none"},
+        {"role": "operator", "permissions": ["list", "read", "execute"], "minimum_assurance": "low"},
+        {"role": "user", "permissions": ["list", "read", "execute"], "minimum_assurance": "low"}
+      ]
+    },
+    {
+      "capability_id": "legacy.command.endpoints",
+      "visibility": "listed",
+      "default_permissions": ["list"],
+      "role_permissions": [
+        {"role": "admin", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "none"},
+        {"role": "operator", "permissions": ["list", "read", "execute"], "minimum_assurance": "low"},
+        {"role": "user", "permissions": ["list", "read"], "minimum_assurance": "low"}
+      ]
+    },
+    {
+      "capability_id": "legacy.command.configure",
+      "visibility": "admin",
+      "default_permissions": [],
+      "minimum_assurance": "high",
+      "role_permissions": [
+        {"role": "admin", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "high"}
+      ]
+    },
+    {
+      "capability_id": "core.chat",
+      "visibility": "public",
+      "default_permissions": ["list", "read"],
+      "role_permissions": [
+        {"role": "admin", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "none"},
+        {"role": "operator", "permissions": ["list", "read", "execute"], "minimum_assurance": "low"},
+        {"role": "user", "permissions": ["list", "read", "execute"], "minimum_assurance": "low"},
+        {"role": "anonymous", "permissions": ["list", "read"], "minimum_assurance": "none"}
+      ]
+    },
+    {
+      "capability_id": "core.chat.with_tools",
+      "visibility": "protected",
+      "default_permissions": [],
+      "minimum_assurance": "medium",
+      "role_permissions": [
+        {"role": "admin", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "medium"},
+        {"role": "operator", "permissions": ["list", "read", "execute"], "minimum_assurance": "medium"}
+      ]
+    },
+    {
+      "capability_id": "core.llm.invoke",
+      "visibility": "private",
+      "default_permissions": [],
+      "minimum_assurance": "medium",
+      "role_permissions": [
+        {"role": "admin", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "medium"},
+        {"role": "operator", "permissions": ["list", "read", "execute"], "minimum_assurance": "medium"},
+        {"role": "system", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "none"}
+      ]
+    },
+    {
+      "capability_id": "core.session.create",
+      "visibility": "public",
+      "default_permissions": ["list", "read", "execute"],
+      "role_permissions": [
+        {"role": "*", "permissions": ["list", "read", "execute"], "minimum_assurance": "none"}
+      ]
+    },
+    {
+      "capability_id": "core.session.destroy",
+      "visibility": "listed",
+      "default_permissions": [],
+      "role_permissions": [
+        {"role": "admin", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "low"},
+        {"role": "operator", "permissions": ["list", "read", "execute"], "minimum_assurance": "low"},
+        {"role": "user", "permissions": ["list", "read", "execute"], "minimum_assurance": "low"}
+      ]
+    },
+    {
+      "capability_id": "admin.acl.manage",
+      "visibility": "admin",
+      "default_permissions": [],
+      "minimum_assurance": "high",
+      "role_permissions": [
+        {"role": "admin", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "high"}
+      ]
+    },
+    {
+      "capability_id": "admin.principal.manage",
+      "visibility": "admin",
+      "default_permissions": [],
+      "minimum_assurance": "high",
+      "role_permissions": [
+        {"role": "admin", "permissions": ["list", "read", "execute", "modify", "delete"], "minimum_assurance": "high"}
+      ]
+    }
+  ]
+}

@@ -22,6 +22,8 @@ class KStarMemory:
     - Traces: Complete K→S→T→A→R episodes (persisted to STM)
     - Perceptions: Facts and observations
     - Skills: Learned capabilities
+    - ACLs: Capability Access Control Lists (bootstrap data)
+    - Principals: Principal definitions (bootstrap data)
     """
 
     def __init__(self, storage=None):
@@ -35,6 +37,10 @@ class KStarMemory:
         self.traces: List[Dict[str, Any]] = []
         self.perceptions: List[Dict[str, Any]] = []
         self.skills: List[Dict[str, Any]] = []
+        # Bootstrap data - loaded from configuration/memory server
+        self.capability_acls: Dict[str, Dict[str, Any]] = {}
+        self.principals: Dict[str, Dict[str, Any]] = {}
+        self.credential_bindings: Dict[str, Dict[str, Any]] = {}
 
     async def store_trace(self, trace: Dict[str, Any]) -> str:
         """
@@ -137,5 +143,217 @@ class KStarMemory:
         return {
             "trace_count": len(self.traces),
             "perception_count": len(self.perceptions),
-            "skill_count": len(self.skills)
+            "skill_count": len(self.skills),
+            "acl_count": len(self.capability_acls),
+            "principal_count": len(self.principals),
+            "binding_count": len(self.credential_bindings)
         }
+
+    # =========================================================================
+    # ACL Storage (Bootstrap Data)
+    # =========================================================================
+
+    async def store_acl(self, acl: Dict[str, Any]) -> str:
+        """
+        Store a capability ACL definition.
+
+        Args:
+            acl: Dict with keys: capability_id, visibility, default_permissions, role_permissions
+
+        Returns:
+            ACL ID (same as capability_id)
+        """
+        capability_id = acl.get("capability_id")
+        if not capability_id:
+            raise ValueError("ACL must have capability_id")
+
+        self.capability_acls[capability_id] = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **acl
+        }
+        logger.debug(f"Stored ACL for capability: {capability_id}")
+        return capability_id
+
+    async def get_acl(self, capability_id: str) -> Optional[Dict[str, Any]]:
+        """Get ACL for a specific capability"""
+        return self.capability_acls.get(capability_id)
+
+    async def list_acls(self) -> List[Dict[str, Any]]:
+        """List all stored ACLs"""
+        return list(self.capability_acls.values())
+
+    async def delete_acl(self, capability_id: str) -> bool:
+        """Delete an ACL"""
+        if capability_id in self.capability_acls:
+            del self.capability_acls[capability_id]
+            logger.debug(f"Deleted ACL for capability: {capability_id}")
+            return True
+        return False
+
+    async def bulk_store_acls(self, acls: List[Dict[str, Any]]) -> int:
+        """
+        Bulk store multiple ACLs (for bootstrap).
+
+        Args:
+            acls: List of ACL definitions
+
+        Returns:
+            Number of ACLs stored
+        """
+        count = 0
+        for acl in acls:
+            try:
+                await self.store_acl(acl)
+                count += 1
+            except Exception as e:
+                logger.warning(f"Failed to store ACL: {e}")
+        logger.info(f"Bulk stored {count} ACLs")
+        return count
+
+    # =========================================================================
+    # Principal Storage (Bootstrap Data)
+    # =========================================================================
+
+    async def store_principal(self, principal: Dict[str, Any]) -> str:
+        """
+        Store a principal definition.
+
+        Args:
+            principal: Dict with keys: urn, display_name, roles, organization, metadata
+
+        Returns:
+            Principal URN
+        """
+        urn = principal.get("urn")
+        if not urn:
+            raise ValueError("Principal must have urn")
+
+        self.principals[urn] = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **principal
+        }
+        logger.debug(f"Stored principal: {urn}")
+        return urn
+
+    async def get_principal(self, urn: str) -> Optional[Dict[str, Any]]:
+        """Get principal by URN"""
+        return self.principals.get(urn)
+
+    async def list_principals(self) -> List[Dict[str, Any]]:
+        """List all stored principals"""
+        return list(self.principals.values())
+
+    async def bulk_store_principals(self, principals: List[Dict[str, Any]]) -> int:
+        """
+        Bulk store multiple principals (for bootstrap).
+
+        Args:
+            principals: List of principal definitions
+
+        Returns:
+            Number of principals stored
+        """
+        count = 0
+        for principal in principals:
+            try:
+                await self.store_principal(principal)
+                count += 1
+            except Exception as e:
+                logger.warning(f"Failed to store principal: {e}")
+        logger.info(f"Bulk stored {count} principals")
+        return count
+
+    # =========================================================================
+    # Credential Binding Storage (Bootstrap Data)
+    # =========================================================================
+
+    async def store_credential_binding(self, binding: Dict[str, Any]) -> str:
+        """
+        Store a credential→principal binding.
+
+        Args:
+            binding: Dict with keys: credential_type, credential_value, principal_urn, assurance_level
+
+        Returns:
+            Binding ID
+        """
+        # Create binding key from credential type and value
+        cred_type = binding.get("credential_type", "unknown")
+        cred_value = binding.get("credential_value", "unknown")
+        binding_id = f"{cred_type}:{cred_value}"
+
+        self.credential_bindings[binding_id] = {
+            "id": binding_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **binding
+        }
+        logger.debug(f"Stored credential binding: {binding_id}")
+        return binding_id
+
+    async def get_credential_binding(self, credential_type: str, credential_value: str) -> Optional[Dict[str, Any]]:
+        """Get binding for a specific credential"""
+        binding_id = f"{credential_type}:{credential_value}"
+        return self.credential_bindings.get(binding_id)
+
+    async def list_credential_bindings(self) -> List[Dict[str, Any]]:
+        """List all credential bindings"""
+        return list(self.credential_bindings.values())
+
+    async def bulk_store_credential_bindings(self, bindings: List[Dict[str, Any]]) -> int:
+        """
+        Bulk store multiple credential bindings (for bootstrap).
+
+        Args:
+            bindings: List of binding definitions
+
+        Returns:
+            Number of bindings stored
+        """
+        count = 0
+        for binding in bindings:
+            try:
+                await self.store_credential_binding(binding)
+                count += 1
+            except Exception as e:
+                logger.warning(f"Failed to store credential binding: {e}")
+        logger.info(f"Bulk stored {count} credential bindings")
+        return count
+
+    # =========================================================================
+    # Bootstrap Loading
+    # =========================================================================
+
+    async def load_bootstrap_data(self, bootstrap_config: Dict[str, Any]) -> Dict[str, int]:
+        """
+        Load bootstrap data from configuration.
+
+        This is called at startup to preload ACLs, principals, and bindings.
+
+        Args:
+            bootstrap_config: Dict with keys: acls, principals, credential_bindings
+
+        Returns:
+            Dict with counts of loaded items
+        """
+        results = {
+            "acls": 0,
+            "principals": 0,
+            "credential_bindings": 0
+        }
+
+        # Load ACLs
+        if "acls" in bootstrap_config:
+            results["acls"] = await self.bulk_store_acls(bootstrap_config["acls"])
+
+        # Load principals
+        if "principals" in bootstrap_config:
+            results["principals"] = await self.bulk_store_principals(bootstrap_config["principals"])
+
+        # Load credential bindings
+        if "credential_bindings" in bootstrap_config:
+            results["credential_bindings"] = await self.bulk_store_credential_bindings(
+                bootstrap_config["credential_bindings"]
+            )
+
+        logger.info(f"Loaded bootstrap data: {results}")
+        return results

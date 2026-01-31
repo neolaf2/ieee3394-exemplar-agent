@@ -193,12 +193,266 @@ def create_sdk_tools(gateway: "AgentGateway"):
                 "isError": True
             }
 
+    # =========================================================================
+    # ACL Tools (Capability Access Control)
+    # =========================================================================
+
+    @tool(
+        name="list_acls",
+        description="List all capability ACL definitions",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "visibility_filter": {
+                    "type": "string",
+                    "description": "Filter by visibility tier (public, listed, protected, private, admin)",
+                    "enum": ["public", "listed", "protected", "private", "admin"]
+                }
+            },
+            "required": []
+        }
+    )
+    async def list_acls_tool(args: Dict[str, Any]) -> Dict[str, Any]:
+        """List all ACL definitions"""
+        if not gateway.memory:
+            return {
+                "content": [{"type": "text", "text": "KSTAR memory not available"}],
+                "isError": True
+            }
+
+        try:
+            acls = await gateway.memory.list_acls()
+            visibility_filter = args.get("visibility_filter")
+
+            if visibility_filter:
+                acls = [a for a in acls if a.get("visibility") == visibility_filter]
+
+            if not acls:
+                return {
+                    "content": [{"type": "text", "text": "No ACLs found"}]
+                }
+
+            result_text = f"Found {len(acls)} ACLs:\n\n"
+            for acl in acls:
+                result_text += f"- **{acl.get('capability_id')}**\n"
+                result_text += f"  Visibility: {acl.get('visibility', 'unknown')}\n"
+                role_perms = acl.get('role_permissions', [])
+                if role_perms:
+                    roles = [rp.get('role', '?') for rp in role_perms]
+                    result_text += f"  Roles: {', '.join(roles)}\n"
+                result_text += "\n"
+
+            return {
+                "content": [{"type": "text", "text": result_text}]
+            }
+
+        except Exception as e:
+            logger.exception(f"Error listing ACLs: {e}")
+            return {
+                "content": [{"type": "text", "text": f"Error: {str(e)}"}],
+                "isError": True
+            }
+
+    @tool(
+        name="get_acl",
+        description="Get ACL definition for a specific capability",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "capability_id": {
+                    "type": "string",
+                    "description": "The capability ID to get ACL for"
+                }
+            },
+            "required": ["capability_id"]
+        }
+    )
+    async def get_acl_tool(args: Dict[str, Any]) -> Dict[str, Any]:
+        """Get ACL for a capability"""
+        if not gateway.memory:
+            return {
+                "content": [{"type": "text", "text": "KSTAR memory not available"}],
+                "isError": True
+            }
+
+        try:
+            capability_id = args["capability_id"]
+            acl = await gateway.memory.get_acl(capability_id)
+
+            if not acl:
+                return {
+                    "content": [{"type": "text", "text": f"No ACL found for: {capability_id}"}]
+                }
+
+            import json
+            return {
+                "content": [{"type": "text", "text": json.dumps(acl, indent=2)}]
+            }
+
+        except Exception as e:
+            logger.exception(f"Error getting ACL: {e}")
+            return {
+                "content": [{"type": "text", "text": f"Error: {str(e)}"}],
+                "isError": True
+            }
+
+    @tool(
+        name="store_acl",
+        description="Store or update an ACL definition (admin only)",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "capability_id": {
+                    "type": "string",
+                    "description": "The capability ID"
+                },
+                "visibility": {
+                    "type": "string",
+                    "description": "Visibility tier",
+                    "enum": ["public", "listed", "protected", "private", "admin"]
+                },
+                "default_permissions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Default permissions for unauthenticated access"
+                },
+                "role_permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "role": {"type": "string"},
+                            "permissions": {"type": "array", "items": {"type": "string"}},
+                            "min_assurance": {"type": "integer"}
+                        }
+                    },
+                    "description": "Role-specific permission mappings"
+                }
+            },
+            "required": ["capability_id", "visibility"]
+        }
+    )
+    async def store_acl_tool(args: Dict[str, Any]) -> Dict[str, Any]:
+        """Store an ACL definition"""
+        if not gateway.memory:
+            return {
+                "content": [{"type": "text", "text": "KSTAR memory not available"}],
+                "isError": True
+            }
+
+        try:
+            acl_id = await gateway.memory.store_acl(args)
+            return {
+                "content": [{"type": "text", "text": f"ACL stored for capability: {acl_id}"}]
+            }
+
+        except Exception as e:
+            logger.exception(f"Error storing ACL: {e}")
+            return {
+                "content": [{"type": "text", "text": f"Error: {str(e)}"}],
+                "isError": True
+            }
+
+    @tool(
+        name="list_principals",
+        description="List all principal definitions",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "role_filter": {
+                    "type": "string",
+                    "description": "Filter by role"
+                }
+            },
+            "required": []
+        }
+    )
+    async def list_principals_tool(args: Dict[str, Any]) -> Dict[str, Any]:
+        """List all principals"""
+        if not gateway.memory:
+            return {
+                "content": [{"type": "text", "text": "KSTAR memory not available"}],
+                "isError": True
+            }
+
+        try:
+            principals = await gateway.memory.list_principals()
+            role_filter = args.get("role_filter")
+
+            if role_filter:
+                principals = [
+                    p for p in principals
+                    if role_filter in p.get("roles", [])
+                ]
+
+            if not principals:
+                return {
+                    "content": [{"type": "text", "text": "No principals found"}]
+                }
+
+            result_text = f"Found {len(principals)} principals:\n\n"
+            for p in principals:
+                result_text += f"- **{p.get('display_name', 'Unknown')}**\n"
+                result_text += f"  URN: {p.get('urn', '?')}\n"
+                result_text += f"  Roles: {', '.join(p.get('roles', []))}\n\n"
+
+            return {
+                "content": [{"type": "text", "text": result_text}]
+            }
+
+        except Exception as e:
+            logger.exception(f"Error listing principals: {e}")
+            return {
+                "content": [{"type": "text", "text": f"Error: {str(e)}"}],
+                "isError": True
+            }
+
+    @tool(
+        name="get_memory_stats",
+        description="Get KSTAR memory statistics including ACLs and principals",
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    )
+    async def get_memory_stats_tool(args: Dict[str, Any]) -> Dict[str, Any]:
+        """Get memory statistics"""
+        if not gateway.memory:
+            return {
+                "content": [{"type": "text", "text": "KSTAR memory not available"}],
+                "isError": True
+            }
+
+        try:
+            stats = await gateway.memory.get_stats()
+
+            result_text = "KSTAR Memory Statistics:\n\n"
+            result_text += f"- Traces: {stats.get('trace_count', 0)}\n"
+            result_text += f"- Perceptions: {stats.get('perception_count', 0)}\n"
+            result_text += f"- Skills: {stats.get('skill_count', 0)}\n"
+            result_text += f"- Capability ACLs: {stats.get('acl_count', 0)}\n"
+            result_text += f"- Principals: {stats.get('principal_count', 0)}\n"
+            result_text += f"- Credential Bindings: {stats.get('binding_count', 0)}\n"
+
+            return {
+                "content": [{"type": "text", "text": result_text}]
+            }
+
+        except Exception as e:
+            logger.exception(f"Error getting stats: {e}")
+            return {
+                "content": [{"type": "text", "text": f"Error: {str(e)}"}],
+                "isError": True
+            }
+
     # Import and create token tools
     from .token_tools import create_token_tools
     token_tools = create_token_tools(gateway)
 
-    # Combine all tools
-    all_tools = [query_memory_tool, store_trace_tool, list_skills_tool] + token_tools
+    # Combine all tools (including ACL tools)
+    acl_tools = [list_acls_tool, get_acl_tool, store_acl_tool, list_principals_tool, get_memory_stats_tool]
+    all_tools = [query_memory_tool, store_trace_tool, list_skills_tool] + acl_tools + token_tools
 
     # Create SDK MCP server with all tools
     server = create_sdk_mcp_server(
