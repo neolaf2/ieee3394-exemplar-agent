@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="settingsManager()">
+    <div class="max-w-3xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-gray-900">Account Settings</h1>
+            <p class="text-gray-600">Manage your profile and security settings</p>
+        </div>
+
+        <!-- Success/Error Messages -->
+        <div x-show="message" x-cloak class="mb-6 p-4 rounded-lg"
+             :class="messageType === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'">
+            <p :class="messageType === 'success' ? 'text-green-700' : 'text-red-700'" x-text="message"></p>
+        </div>
+
+        <!-- Profile Section -->
+        <div class="bg-white rounded-lg shadow mb-6">
+            <div class="px-6 py-4 border-b">
+                <h2 class="text-lg font-semibold text-gray-900">Profile Information</h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input type="email" value="{{ user.email }}" disabled
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                        <p class="mt-1 text-xs text-gray-500">Email cannot be changed</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Account Status</label>
+                        <div class="flex items-center mt-2">
+                            <span class="px-3 py-1 text-sm font-medium rounded-full
+                                  {% if user.status.value == 'active' %}bg-green-100 text-green-800
+                                  {% elif user.status.value == 'pending' %}bg-yellow-100 text-yellow-800
+                                  {% else %}bg-red-100 text-red-800{% endif %}">
+                                {{ user.status.value | title }}
+                            </span>
+                            {% if user.email_verified %}
+                            <span class="ml-2 text-sm text-green-600 flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                Email verified
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                        <input type="text" value="{{ user.role.value | title }}" disabled
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Member Since</label>
+                        <input type="text" value="{{ user.created_at[:10] if user.created_at is string else user.created_at.strftime('%Y-%m-%d') }}" disabled
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Password Section -->
+        <div class="bg-white rounded-lg shadow mb-6">
+            <div class="px-6 py-4 border-b">
+                <h2 class="text-lg font-semibold text-gray-900">Change Password</h2>
+            </div>
+            <form @submit.prevent="changePassword" class="p-6">
+                <div class="space-y-4 max-w-md">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                        <input type="password" x-model="passwordForm.current_password" required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                        <input type="password" x-model="passwordForm.new_password" required minlength="8"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                        <input type="password" x-model="confirmPassword" required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <p x-show="confirmPassword && passwordForm.new_password !== confirmPassword"
+                           class="mt-1 text-sm text-red-600">Passwords do not match</p>
+                    </div>
+                    <button type="submit"
+                            :disabled="loading || passwordForm.new_password !== confirmPassword"
+                            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-medium rounded-lg transition">
+                        Update Password
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Security Section -->
+        <div class="bg-white rounded-lg shadow mb-6">
+            <div class="px-6 py-4 border-b">
+                <h2 class="text-lg font-semibold text-gray-900">Security</h2>
+            </div>
+            <div class="p-6">
+                <div class="flex items-center justify-between py-4 border-b">
+                    <div>
+                        <h3 class="font-medium text-gray-900">API Keys</h3>
+                        <p class="text-sm text-gray-500">Manage keys for programmatic access</p>
+                    </div>
+                    <a href="/auth/api-keys" class="text-indigo-600 hover:text-indigo-500 font-medium">
+                        Manage Keys
+                    </a>
+                </div>
+                <div class="flex items-center justify-between py-4 border-b">
+                    <div>
+                        <h3 class="font-medium text-gray-900">Active Sessions</h3>
+                        <p class="text-sm text-gray-500">View and manage your login sessions</p>
+                    </div>
+                    <button @click="logoutAll" class="text-red-600 hover:text-red-500 font-medium">
+                        Logout All Sessions
+                    </button>
+                </div>
+                <div class="flex items-center justify-between py-4">
+                    <div>
+                        <h3 class="font-medium text-gray-900">Last Login</h3>
+                        <p class="text-sm text-gray-500">
+                            {% if user.last_login_at %}
+                            {{ user.last_login_at[:19] if user.last_login_at is string else user.last_login_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% if user.last_login_ip %}from {{ user.last_login_ip }}{% endif %}
+                            {% else %}
+                            Never recorded
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="bg-white rounded-lg shadow border-2 border-red-200">
+            <div class="px-6 py-4 border-b bg-red-50">
+                <h2 class="text-lg font-semibold text-red-700">Danger Zone</h2>
+            </div>
+            <div class="p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-medium text-gray-900">Deactivate Account</h3>
+                        <p class="text-sm text-gray-500">Permanently deactivate your account and all associated data</p>
+                    </div>
+                    <button @click="confirmDeactivate"
+                            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition">
+                        Deactivate Account
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function settingsManager() {
+    return {
+        passwordForm: {
+            current_password: '',
+            new_password: ''
+        },
+        confirmPassword: '',
+        loading: false,
+        message: '',
+        messageType: 'success',
+
+        async changePassword() {
+            this.loading = true;
+            this.message = '';
+
+            try {
+                const response = await fetch('/auth/api/change-password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(this.passwordForm)
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail);
+
+                this.message = 'Password updated successfully';
+                this.messageType = 'success';
+                this.passwordForm = {current_password: '', new_password: ''};
+                this.confirmPassword = '';
+            } catch (e) {
+                this.message = e.message;
+                this.messageType = 'error';
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async logoutAll() {
+            if (!confirm('This will log you out of all devices. Continue?')) return;
+
+            try {
+                const response = await fetch('/auth/api/logout-all', {method: 'POST'});
+                if (!response.ok) throw new Error('Failed to logout');
+                window.location.href = '/auth/login';
+            } catch (e) {
+                this.message = e.message;
+                this.messageType = 'error';
+            }
+        },
+
+        confirmDeactivate() {
+            if (confirm('Are you sure you want to deactivate your account? This action cannot be undone.')) {
+                if (confirm('This will permanently delete all your data. Type "DEACTIVATE" to confirm.')) {
+                    // Would call deactivation endpoint
+                    alert('Account deactivation is not yet implemented.');
+                }
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -6,6 +6,7 @@ Consolidates all HTTP-based channel adapters onto a single port with different r
 - /api/      - Web chat REST API endpoints
 - /v1/       - Anthropic API compatible endpoints
 - /p3394/    - P3394 native protocol endpoints
+- /auth/     - Authentication pages and API (signup, login, API keys)
 
 This simplifies deployment by using a single port for all HTTP traffic.
 """
@@ -19,10 +20,13 @@ from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, Request,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import uvicorn
 
 from ..core.gateway_sdk import AgentGateway
 from ..core.umf import P3394Message, P3394Content, ContentType, MessageType, P3394Address
+from ..data.repos.auth import AuthRepository
+from .auth_router import create_auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +53,8 @@ class UnifiedWebServer:
         host: str = "0.0.0.0",
         port: int = 8000,
         anthropic_api_keys: Optional[Set[str]] = None,
-        static_dir: Optional[str] = None
+        static_dir: Optional[str] = None,
+        auth_repo: Optional[AuthRepository] = None,
     ):
         self.gateway = gateway
         self.host = host
@@ -63,6 +68,15 @@ class UnifiedWebServer:
         else:
             # Default to project root's static folder
             self.static_dir = Path(__file__).parent.parent.parent.parent / "static"
+
+        # Templates directory
+        self.templates_dir = Path(__file__).parent.parent / "templates"
+        self.templates = None
+        if self.templates_dir.exists():
+            self.templates = Jinja2Templates(directory=str(self.templates_dir))
+
+        # Auth repository (creates in-memory store if not provided)
+        self.auth_repo = auth_repo or AuthRepository()
 
         # Active WebSocket connections by channel
         self.chat_websockets: Dict[str, WebSocket] = {}
@@ -586,6 +600,15 @@ class UnifiedWebServer:
         self.app.include_router(p3394_router)
 
         # =====================================================================
+        # AUTHENTICATION (/auth/...)
+        # =====================================================================
+
+        if self.templates:
+            auth_router = create_auth_router(self.templates, self.auth_repo)
+            self.app.include_router(auth_router)
+            logger.info("Auth router mounted at /auth")
+
+        # =====================================================================
         # HEALTH & STATUS (root level)
         # =====================================================================
 
@@ -600,7 +623,8 @@ class UnifiedWebServer:
                     "web_chat": "/",
                     "api": "/api",
                     "anthropic": "/v1",
-                    "p3394": "/p3394"
+                    "p3394": "/p3394",
+                    "auth": "/auth"
                 }
             }
 
