@@ -6,6 +6,11 @@ Implements the 4 irreducible memory classes:
 2. Perceptions (Declarative) - Facts and observations
 3. Skills (Procedural) - How to act
 4. Control Tokens (Authority) - The gate between thought and action
+
+Plus the Memory System (meta-skill) that:
+- Hooks into the agent loop at key stages
+- Runs necessity evaluation to auto-detect tokens
+- Persists tokens with searchable indexes and categories
 """
 
 from .kstar import KStarMemory
@@ -27,6 +32,17 @@ from .supabase_token_store import (
     revoke_token,
     get_lineage,
     SUPABASE_SCHEMA
+)
+from .necessity_evaluator import (
+    NecessityEvaluator,
+    NecessityCategory,
+    DetectedToken
+)
+from .memory_system import (
+    MemorySystem,
+    MemorySystemConfig,
+    get_memory_system,
+    initialize_memory_system
 )
 
 __all__ = [
@@ -51,4 +67,15 @@ __all__ = [
     "revoke_token",
     "get_lineage",
     "SUPABASE_SCHEMA",
+
+    # Necessity Evaluator (auto-detection)
+    "NecessityEvaluator",
+    "NecessityCategory",
+    "DetectedToken",
+
+    # Memory System (meta-skill)
+    "MemorySystem",
+    "MemorySystemConfig",
+    "get_memory_system",
+    "initialize_memory_system",
 ]
