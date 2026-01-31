@@ -23,6 +23,8 @@ from .skill_loader import SkillLoader
 from ..memory.kstar import KStarMemory
 from .capability_registry import CapabilityRegistry
 from .capability_engine import CapabilityInvocationEngine
+from .capability_acl import CapabilityACLRegistry, CapabilityVisibility
+from .capability_access import CapabilityAccessManager
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -119,9 +121,20 @@ class AgentGateway:
         self.capability_registry = CapabilityRegistry(
             persistence_path=self.working_dir / ".claude" / "capabilities.json"
         )
+
+        # NEW: Capability Access Control
+        self.acl_registry = CapabilityACLRegistry(
+            storage_path=self.working_dir / ".claude" / "capability_acls.json"
+        )
+        self.access_manager = CapabilityAccessManager(
+            acl_registry=self.acl_registry,
+            capability_registry=self.capability_registry
+        )
+
         self.capability_engine = CapabilityInvocationEngine(
             registry=self.capability_registry,
-            gateway=self
+            gateway=self,
+            access_manager=self.access_manager
         )
 
         # LEGACY: Command registry (will be migrated to capabilities)
@@ -531,13 +544,21 @@ Available subagents:
 
     async def _cmd_help(self, message: P3394Message, session: Session, **kwargs) -> P3394Message:
         """Handle /help command"""
-        # Build command list dynamically
+        # Build command list dynamically, filtered by session visibility
         seen = set()
         commands_list = ""
         for name, cmd in self.commands.items():
             if cmd.name not in seen:
-                commands_list += f"- `{cmd.name}` - {cmd.description}\n"
-                seen.add(cmd.name)
+                # Check if command capability is visible to this session
+                cap_id = f"legacy.command.{cmd.name.lstrip('/')}"
+                if session.can_list_capability(cap_id) or session.client_role in ("admin", "system"):
+                    commands_list += f"- `{cmd.name}` - {cmd.description}\n"
+                    seen.add(cmd.name)
+                elif not session.is_authenticated:
+                    # Show public commands to anonymous
+                    if cmd.name in ("/help", "/about", "/version", "/login"):
+                        commands_list += f"- `{cmd.name}` - {cmd.description}\n"
+                        seen.add(cmd.name)
 
         help_text = f"""# {self.AGENT_NAME} - Help
 
@@ -752,19 +773,32 @@ This agent follows the P3394 Universal Message Format (UMF) standard for agent i
         )
 
     async def _cmd_list_skills(self, message: P3394Message, session: Session, **kwargs) -> P3394Message:
-        """Handle /listSkills command"""
+        """Handle /listSkills command - filtered by session visibility"""
         if not self.skills:
             skills_text = "# Skills\n\nNo skills loaded yet. Skills can be added to `.claude/skills/` directory."
         else:
             skills_text = "# Acquired Skills\n\n"
+            visible_count = 0
+
             for skill_name, skill_def in self.skills.items():
-                description = skill_def.get('description', 'No description')
-                triggers = skill_def.get('triggers', [])
-                skills_text += f"**{skill_name}**\n"
-                skills_text += f"  {description}\n"
-                if triggers:
-                    skills_text += f"  _Triggers: {', '.join(triggers)}_\n"
-                skills_text += "\n"
+                # Check if skill capability is visible to this session
+                cap_id = f"skill.{skill_name}"
+                if session.can_list_capability(cap_id) or session.client_role in ("admin", "system"):
+                    description = skill_def.get('description', 'No description')
+                    triggers = skill_def.get('triggers', [])
+                    skills_text += f"**{skill_name}**\n"
+                    skills_text += f"  {description}\n"
+                    if triggers:
+                        skills_text += f"  _Triggers: {', '.join(triggers)}_\n"
+                    skills_text += "\n"
+                    visible_count += 1
+
+            if visible_count == 0:
+                skills_text += "_No skills available for your current access level._\n"
+
+            # Show count for admin
+            if session.client_role in ("admin", "system") and visible_count < len(self.skills):
+                skills_text += f"\n_Showing {visible_count} of {len(self.skills)} skills_\n"
 
         return P3394Message.text(skills_text, type=MessageType.RESPONSE, reply_to=message.id, session_id=session.id)
 
@@ -1262,6 +1296,13 @@ required permissions: {required_permissions}
                     f"Principal resolved: {assertion.channel_id}:{assertion.channel_identity} "
                     f"→ {principal.principal_id} (assurance={assertion.assurance_level.value})"
                 )
+
+                # Compute capability access for session
+                self.access_manager.compute_session_access(
+                    session=session,
+                    principal=principal,
+                    assurance=assertion.assurance_level
+                )
             else:
                 # No principal found - use anonymous
                 anonymous = self.principal_registry.get_anonymous_principal()
@@ -1273,12 +1314,26 @@ required permissions: {required_permissions}
                     f"No principal found for {assertion.channel_id}:{assertion.channel_identity}, "
                     f"using anonymous"
                 )
+
+                # Compute anonymous capability access
+                self.access_manager.compute_session_access(
+                    session=session,
+                    principal=anonymous,
+                    assurance=AssuranceLevel.NONE
+                )
         else:
             # No assertion - use anonymous
             anonymous = self.principal_registry.get_anonymous_principal()
             session.client_principal_id = anonymous.principal_id
             session.assurance_level = AssuranceLevel.NONE.value
             session.is_authenticated = False
+
+            # Compute anonymous capability access
+            self.access_manager.compute_session_access(
+                session=session,
+                principal=anonymous,
+                assurance=AssuranceLevel.NONE
+            )
 
         return session
 

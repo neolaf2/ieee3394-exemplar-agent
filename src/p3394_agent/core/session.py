@@ -11,7 +11,7 @@ Supports two concurrency modes (configured in agent.yaml):
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, Set, TYPE_CHECKING
 from uuid import uuid4
 from pathlib import Path
 from enum import Enum
@@ -20,6 +20,8 @@ import shutil
 
 if TYPE_CHECKING:
     from config.schema import SessionConfig
+    from .capability_acl import CapabilityAccessControl, CapabilityPermission
+    from .auth.principal import Principal, AssuranceLevel
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +76,16 @@ class Session:
     pending_handoff_to: Optional[str] = None
     handoff_requested_at: Optional[datetime] = None
 
+    # Capability Access Cache (computed on authentication/login)
+    # These are computed from the resolved principal and role
+    client_role: str = "anonymous"                           # Resolved role shorthand
+    visible_capabilities: Set[str] = field(default_factory=set)   # Can LIST
+    accessible_capabilities: Set[str] = field(default_factory=set)  # Can EXECUTE
+    capability_permissions: Dict[str, Set[str]] = field(default_factory=dict)  # capability_id → permissions
+
+    # Internal session flag (for subagent calls)
+    is_internal_session: bool = False
+
     def is_expired(self) -> bool:
         """Check if session has expired"""
         if self.expires_at is None:
@@ -98,6 +110,49 @@ class Session:
         """Revoke a permission from this session"""
         if permission in self.granted_permissions:
             self.granted_permissions.remove(permission)
+
+    # =========================================================================
+    # Capability Access Methods
+    # =========================================================================
+
+    def can_list_capability(self, capability_id: str) -> bool:
+        """Check if this session can list (see) a capability"""
+        # Admin can see everything
+        if self.client_role in ("admin", "urn:role:admin"):
+            return True
+        return capability_id in self.visible_capabilities
+
+    def can_execute_capability(self, capability_id: str) -> bool:
+        """Check if this session can execute a capability"""
+        # Admin can execute everything
+        if self.client_role in ("admin", "urn:role:admin"):
+            return True
+        return capability_id in self.accessible_capabilities
+
+    def get_capability_permissions(self, capability_id: str) -> Set[str]:
+        """Get permissions for a specific capability"""
+        # Admin has all permissions
+        if self.client_role in ("admin", "urn:role:admin"):
+            return {"list", "read", "execute", "modify", "delete"}
+        return self.capability_permissions.get(capability_id, set())
+
+    def update_capability_cache(
+        self,
+        visible: Set[str],
+        accessible: Set[str],
+        permissions: Dict[str, Set[str]]
+    ) -> None:
+        """Update the capability access cache (called after auth/role resolution)"""
+        self.visible_capabilities = visible
+        self.accessible_capabilities = accessible
+        self.capability_permissions = permissions
+
+    def clear_capability_cache(self) -> None:
+        """Clear capability cache (called on logout)"""
+        self.visible_capabilities = set()
+        self.accessible_capabilities = set()
+        self.capability_permissions = {}
+        self.client_role = "anonymous"
 
     def get_workspace_dir(self) -> Path:
         """Get the workspace subdirectory"""

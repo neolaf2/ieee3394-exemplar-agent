@@ -16,11 +16,13 @@ from .capability import (
     CapabilityStatus
 )
 from .capability_registry import CapabilityRegistry
+from .capability_acl import CapabilityPermission
 from .umf import P3394Message, P3394Content, ContentType, MessageType
 from .session import Session
 
 if TYPE_CHECKING:
     from .gateway_sdk import AgentGateway
+    from .capability_access import CapabilityAccessManager
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +40,12 @@ class CapabilityInvocationEngine:
     def __init__(
         self,
         registry: CapabilityRegistry,
-        gateway: "AgentGateway"
+        gateway: "AgentGateway",
+        access_manager: Optional["CapabilityAccessManager"] = None
     ):
         self.registry = registry
         self.gateway = gateway
+        self.access_manager = access_manager
 
         # Substrate handlers
         self._substrate_handlers: Dict[ExecutionSubstrate, Callable] = {
@@ -52,6 +56,10 @@ class CapabilityInvocationEngine:
             ExecutionSubstrate.EXTERNAL_SERVICE: self._execute_external,
             ExecutionSubstrate.TRANSPORT: self._execute_transport,
         }
+
+    def set_access_manager(self, access_manager: "CapabilityAccessManager") -> None:
+        """Set the access manager (for delayed initialization)"""
+        self.access_manager = access_manager
 
     async def invoke(
         self,
@@ -255,7 +263,29 @@ User request: {text}"""
     # Permission and Audit
 
     async def _check_permissions(self, capability: AgentCapabilityDescriptor, session: Session):
-        """Check if session has required permissions"""
+        """
+        Check if session has required permissions.
+
+        Uses CapabilityAccessManager if available for ACL-based authorization,
+        otherwise falls back to legacy permission check.
+        """
+        # Use access manager if available
+        if self.access_manager:
+            decision = self.access_manager.authorize_invocation(
+                session=session,
+                capability_id=capability.capability_id
+            )
+
+            if not decision.allowed:
+                logger.warning(
+                    f"Access denied for {capability.capability_id}: {decision.reason}"
+                )
+                raise PermissionError(
+                    f"Access denied: {decision.reason}"
+                )
+            return
+
+        # Legacy permission check (fallback)
         if not capability.permissions:
             return
 

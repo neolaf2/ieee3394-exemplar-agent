@@ -277,9 +277,45 @@ class UnifiedWebServer:
         p3394_router = APIRouter(prefix="/p3394", tags=["P3394 Protocol"])
 
         @p3394_router.get("/manifest")
-        async def p3394_manifest():
-            """Agent manifest endpoint (P3394 discovery)"""
+        async def p3394_manifest(request: Request, session_id: Optional[str] = None):
+            """
+            Agent manifest endpoint (P3394 discovery).
+
+            Capabilities are filtered based on session visibility:
+            - Anonymous: Only PUBLIC capabilities
+            - Authenticated: Based on role
+            """
             from datetime import datetime
+            from ..core.capability_acl import CapabilityVisibility
+
+            # Get or create session for visibility filtering
+            session = None
+            if session_id:
+                session = self.gateway.session_manager.get_session(session_id)
+
+            # Determine visible commands (filter by visibility)
+            visible_commands = []
+            for cmd in set(self.gateway.commands.values()):
+                cap_id = f"legacy.command.{cmd.name.lstrip('/')}"
+                acl = self.gateway.acl_registry.get_or_default(cap_id)
+
+                # Show PUBLIC commands to everyone
+                if acl.visibility == CapabilityVisibility.PUBLIC:
+                    visible_commands.append(cmd.name)
+                elif session and session.can_list_capability(cap_id):
+                    visible_commands.append(cmd.name)
+
+            # Determine visible skills
+            visible_skills = []
+            for skill_name in self.gateway.skills.keys():
+                cap_id = f"skill.{skill_name}"
+                acl = self.gateway.acl_registry.get_or_default(cap_id)
+
+                if acl.visibility == CapabilityVisibility.PUBLIC:
+                    visible_skills.append(skill_name)
+                elif session and session.can_list_capability(cap_id):
+                    visible_skills.append(skill_name)
+
             return {
                 "agent_id": self.gateway.AGENT_ID,
                 "name": self.gateway.AGENT_NAME,
@@ -289,11 +325,11 @@ class UnifiedWebServer:
                 "address": self.agent_address.to_uri(),
                 "description": "IEEE P3394 Exemplar Agent - Reference implementation",
                 "capabilities": {
-                    "symbolic_commands": list(set(cmd.name for cmd in self.gateway.commands.values())),
+                    "symbolic_commands": visible_commands,
                     "llm_enabled": True,
                     "streaming": True,
                     "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch"],
-                    "skills": [],
+                    "skills": visible_skills,
                     "subagents": ["documentation-agent", "onboarding-agent", "demo-agent"]
                 },
                 "endpoints": {
@@ -302,6 +338,8 @@ class UnifiedWebServer:
                     "websocket": f"ws://{self.host}:{self.port}/p3394/ws",
                     "health": f"http://{self.host}:{self.port}/p3394/health"
                 },
+                "session_id": session.id if session else None,
+                "access_level": session.client_role if session else "anonymous",
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
 
