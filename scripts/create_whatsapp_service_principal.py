@@ -18,7 +18,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.ieee3394_agent.channels.whatsapp.config import (
+from src.p3394_agent.channels.whatsapp.config import (
     ServicePrincipalManager,
     WhatsAppChannelConfig,
     create_default_whatsapp_config,
@@ -166,8 +166,8 @@ Security Notes:
     print()
     print("2. Use this configuration in your agent:")
     print()
-    print("   from ieee3394_agent.channels.whatsapp import WhatsAppChannelAdapter")
-    print("   from ieee3394_agent.channels.whatsapp.config import WhatsAppChannelConfig")
+    print("   from p3394_agent.channels.whatsapp import WhatsAppChannelAdapter")
+    print("   from p3394_agent.channels.whatsapp.config import WhatsAppChannelConfig")
     print()
     print(f"   config = WhatsAppChannelConfig.from_file(Path('{args.output}'))")
     print("   adapter = WhatsAppChannelAdapter(gateway, config)")

@@ -19,7 +19,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.ieee3394_agent.channels.binding import (
+from src.p3394_agent.channels.binding import (
     ChannelBindingManager,
     TerminalBindingUI,
     WebBindingUI,
@@ -28,8 +28,8 @@ from src.ieee3394_agent.channels.binding import (
 
 async def bind_whatsapp(args):
     """Bind WhatsApp channel."""
-    from src.ieee3394_agent.channels.whatsapp.binding import WhatsAppChannelBinding
-    from src.ieee3394_agent.channels.whatsapp.config import (
+    from src.p3394_agent.channels.whatsapp import (
+        WhatsAppChannelBinding,
         WhatsAppChannelConfig,
         ServicePrincipalManager,
     )
@@ -73,7 +73,7 @@ async def bind_whatsapp(args):
         print()
 
         # Create default config
-        from src.ieee3394_agent.channels.whatsapp.config import create_default_whatsapp_config
+        from src.p3394_agent.channels.whatsapp.config import create_default_whatsapp_config
 
         config = create_default_whatsapp_config(
             service_principal=sp,
@@ -98,16 +98,33 @@ async def bind_whatsapp(args):
 
     # Check if bridge is running
     print(f"Checking WhatsApp bridge at {config.bridge_url}...")
-    import aiohttp
+    import urllib.request
+    import urllib.error
+
+    def check_bridge():
+        """Synchronous bridge check."""
+        try:
+            with urllib.request.urlopen(f"{config.bridge_url}/status", timeout=3) as response:
+                return response.status == 200
+        except Exception:
+            return False
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{config.bridge_url}/status", timeout=3) as resp:
-                if resp.status == 200:
-                    print("✓ Bridge is running")
-                else:
-                    print(f"❌ Bridge returned status {resp.status}")
-                    sys.exit(1)
+        # Run sync function in executor
+        loop = asyncio.get_event_loop()
+        is_running = await loop.run_in_executor(None, check_bridge)
+
+        if is_running:
+            print("✓ Bridge is running")
+        else:
+            print(f"❌ Bridge not responding")
+            print()
+            print("Please start the WhatsApp bridge first:")
+            print("  cd whatsapp_bridge")
+            print("  npm install  # (first time only)")
+            print("  npm start")
+            print()
+            sys.exit(1)
     except Exception as e:
         print(f"❌ Cannot connect to bridge: {e}")
         print()
@@ -153,7 +170,7 @@ async def bind_whatsapp(args):
         print("The WhatsApp channel is now ready to use!")
         print()
         print("Start the agent with:")
-        print("  python -m ieee3394_agent --channel whatsapp")
+        print("  python -m p3394_agent --channel whatsapp")
         print()
 
     except TimeoutError:

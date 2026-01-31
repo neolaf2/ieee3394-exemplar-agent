@@ -1,39 +1,67 @@
-# Quick Start Guide
+# P3394 Agent Starter Kit - Quick Start
 
-## Architecture
+Get your P3394-compliant agent running in 5 minutes.
 
-The agent uses a **daemon/client architecture**:
-- **Agent Host (Daemon)**: Runs in the background, always available
-- **Agent Client (CLI)**: Connects to the running daemon for chat sessions
+## Prerequisites
 
-## Step 1: Start the Agent Host (Daemon)
+- Python 3.10+
+- [uv](https://github.com/astral-sh/uv) package manager
+- Anthropic API key
 
-In one terminal, start the agent daemon:
+## Step 1: Install Dependencies
 
 ```bash
-uv run python -m ieee3394_agent --daemon
+uv sync
+```
+
+## Step 2: Set Your API Key
+
+```bash
+export ANTHROPIC_API_KEY='your-api-key-here'
+```
+
+## Step 3: Customize Your Agent (Optional)
+
+Edit `agent.yaml` to customize your agent:
+
+```yaml
+agent:
+  id: "my-custom-agent"
+  name: "My Custom Agent"
+  version: "0.1.0"
+  description: "My P3394-compliant assistant"
+
+channels:
+  cli:
+    enabled: true
+  web:
+    enabled: true
+    port: 8000
+```
+
+## Step 4: Run Your Agent
+
+```bash
+# Run in daemon mode
+uv run python -m p3394_agent --daemon
 ```
 
 You should see:
 ```
-🚀 IEEE 3394 Agent Host running on /tmp/ieee3394-agent.sock
-   Agent: IEEE 3394 Exemplar Agent v0.1.0
+🚀 P3394 Agent running on /tmp/p3394-agent.sock
+   Agent: My Custom Agent v0.1.0
    Press Ctrl+C to stop
 ```
 
-**Leave this running** - it's your agent server.
-
-## Step 2: Connect a Client
+## Step 5: Connect a Client
 
 In a **new terminal**, start a client session:
 
 ```bash
-uv run python -m ieee3394_agent
+uv run python -m p3394_agent
 ```
 
 This launches the interactive CLI interface where you can chat with the agent.
-
-You can connect **multiple clients** to the same daemon!
 
 ## Your First Session
 
@@ -41,14 +69,14 @@ After starting, you'll see:
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║              IEEE 3394 Exemplar Agent                        ║
-║                   CLI Channel                                ║
+║              My Custom Agent                                  ║
+║                   CLI Channel                                 ║
 ╠══════════════════════════════════════════════════════════════╣
-║  Version: 0.1.0                                         ║
-║  Session: abc123...                                     ║
+║  Version: 0.1.0                                              ║
+║  Session: abc123...                                          ║
 ╠══════════════════════════════════════════════════════════════╣
-║  Type /help for commands                                     ║
-║  Type 'exit' to quit                                         ║
+║  Type /help for commands                                      ║
+║  Type 'exit' to quit                                          ║
 ╚══════════════════════════════════════════════════════════════╝
 
 >>>
@@ -56,62 +84,136 @@ After starting, you'll see:
 
 ## Try These Commands
 
-### Symbolic Commands (Instant)
+### Symbolic Commands (Instant, no LLM)
 ```
 >>> /help
 >>> /about
 >>> /status
 >>> /version
+>>> /listSkills
 ```
 
 ### Natural Language (Uses Claude API)
 ```
->>> What is P3394?
->>> Explain the Universal Message Format
->>> How do channel adapters work?
->>> What makes this agent special?
+>>> Hello! What can you do?
+>>> echo Hello World!
+>>> How do I configure channels?
 ```
 
-## Exiting
+## Configuration Reference
 
-To quit the CLI:
+### agent.yaml Structure
+
+```yaml
+# Agent identity
+agent:
+  id: "my-agent"
+  name: "My Agent"
+  version: "0.1.0"
+  description: "Description here"
+
+# Channel configuration
+channels:
+  cli:
+    enabled: true
+  web:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8000
+  whatsapp:
+    enabled: false
+    service_phone: "${WHATSAPP_PHONE}"
+
+# Skills to load
+skills:
+  - name: "echo"
+    enabled: true
+  - name: "help"
+    enabled: true
+
+# LLM configuration
+llm:
+  provider: "anthropic"
+  model: "claude-sonnet-4-20250514"
+  system_prompt: |
+    You are {agent_name}, a helpful assistant.
+
+# Storage configuration
+storage:
+  type: "sqlite"
+  path: "./data/agent.db"
 ```
->>> exit
+
+### Environment Variables
+
+Use environment variables in `agent.yaml`:
+
+```yaml
+channels:
+  whatsapp:
+    service_phone: "${WHATSAPP_PHONE}"           # Required
+    gateway_url: "${GATEWAY_URL:-http://localhost:8000}"  # With default
 ```
 
-Or press `Ctrl+C` and then type `exit`.
+## Creating Custom Skills
 
-## Prerequisites
+Create a skill in `.claude/skills/my-skill/SKILL.md`:
 
-Make sure you have your Anthropic API key set:
+```markdown
+---
+name: my-skill
+description: My custom skill
+triggers:
+  - "do something"
+  - "help me with X"
+---
+
+# My Skill
+
+When this skill is triggered, do the following:
+
+1. Extract the user's request
+2. Process it according to these rules
+3. Return a helpful response
+```
+
+Skills are automatically loaded on agent startup.
+
+## Multi-Channel Setup
+
+Enable all channels:
 
 ```bash
-export ANTHROPIC_API_KEY='your-api-key-here'
+uv run python -m p3394_agent --daemon \
+  --anthropic-api --api-port 8100 \
+  --p3394-server --p3394-port 8101
 ```
 
-Or add to `.env` file in the project root:
-```
-ANTHROPIC_API_KEY=your-api-key-here
-```
+This enables:
+- **CLI** (Unix socket) - Interactive REPL
+- **HTTP API** (port 8100) - Anthropic-compatible API
+- **P3394 Server** (port 8101) - Agent-to-agent protocol
 
 ## Troubleshooting
 
-**"ANTHROPIC_API_KEY not set" error:**
+### "ANTHROPIC_API_KEY not set" error
+
 ```bash
-# Check if set
-echo $ANTHROPIC_API_KEY
-
-# Set temporarily
 export ANTHROPIC_API_KEY='sk-ant-...'
-
-# Or add to your shell profile (~/.zshrc or ~/.bashrc)
-echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc
-source ~/.zshrc
 ```
 
-**Dependencies not installed:**
+### Dependencies not installed
+
 ```bash
 uv sync
+```
+
+### Port already in use
+
+Change the port in `agent.yaml` or use command line:
+
+```bash
+uv run python -m p3394_agent --daemon --p3394-port 8080
 ```
 
 ## What's Happening Behind the Scenes
@@ -120,163 +222,11 @@ uv sync
 2. **Gateway routes** → Determines if symbolic command or LLM
 3. **Handler executes** → Runs function or calls Claude API
 4. **Response returns** → Formatted and displayed
-5. **KSTAR logs** → Every interaction saved to memory
 
-Every message demonstrates the P3394 standard in action!
-
----
-
-## Advanced: Multi-Channel Testing
-
-The agent supports **multiple channel interfaces** simultaneously!
-
-### Start with All Channels
-
-```bash
-# Start daemon with all channels enabled
-uv run python -m ieee3394_agent --daemon \
-  --anthropic-api --api-port 8100 \
-  --p3394-server --p3394-port 8101
-```
-
-This enables:
-- ✅ **CLI** (Unix socket) - Interactive REPL
-- ✅ **HTTP API** (port 8100) - Anthropic-compatible API
-- ✅ **P3394 Server** (port 8101) - Agent-to-agent protocol
-
-### Test All Channels
-
-Run the automated test suite:
-
-```bash
-python test_channels.py
-```
-
-Expected output:
-```
-==================================================================
-TEST: Unix Socket (CLI Channel)
-==================================================================
-✓ Connected to /tmp/ieee3394-agent.sock
-✓ Sent test message
-✓ Received response
-
-==================================================================
-TEST: Anthropic API HTTP Channel
-==================================================================
-✓ Received response
-✓ Streaming works! Received 245 characters
-
-==================================================================
-TEST: P3394 Server Channel
-==================================================================
-✓ Health check passed
-✓ Agent ID: ieee3394-exemplar
-✓ Received P3394 response
-
-==================================================================
-TEST: IEEE WG Manager Skill
-==================================================================
-✓ Ballot calculation response received
-✓ Skill appears to be working
-
-==================================================================
-TEST SUMMARY
-==================================================================
-✓ Unix Socket          PASSED
-✓ Anthropic API        PASSED
-✓ P3394 Server         PASSED
-✓ IEEE WG Skill        PASSED
-
-Results: 4/4 tests passed
-🎉 All tests passed!
-```
-
-### Test via HTTP API
-
-```bash
-curl -X POST http://localhost:8100/v1/messages \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: test-key" \
-  -d '{
-    "model": "claude-sonnet-4-5-20250929",
-    "max_tokens": 1024,
-    "messages": [{
-      "role": "user",
-      "content": "What is IEEE P3394?"
-    }]
-  }'
-```
-
-### Test via P3394 Protocol
-
-```bash
-curl -X POST http://localhost:8101/message \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "request",
-    "content": [{
-      "type": "text",
-      "data": "What skills do you have?"
-    }]
-  }'
-```
-
-### Connect Claude Code CLI to Your Agent
-
-Make Claude Code use your local agent instead of Anthropic's API:
-
-```bash
-# Configure environment
-export ANTHROPIC_BASE_URL=http://localhost:8100
-export ANTHROPIC_API_KEY=test-key
-
-# Now use Claude Code normally - it connects to YOUR agent!
-claude "What is P3394?"
-claude "Help me with an IEEE ballot calculation"
-```
-
----
-
-## Test the IEEE WG Manager Skill
-
-The agent includes a comprehensive IEEE Working Group management skill!
-
-### Via CLI
-```
->>> Help me prepare for an IEEE sponsor ballot
->>> Calculate ballot results: 30 Approve, 5 Disapprove, 10 Abstain
->>> Generate an IEEE meeting agenda
->>> What are the standards lifecycle milestones?
-```
-
-### Via HTTP API
-```bash
-curl -X POST http://localhost:8100/v1/messages \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: test-key" \
-  -d '{
-    "model": "claude-sonnet-4-5-20250929",
-    "max_tokens": 2048,
-    "messages": [{
-      "role": "user",
-      "content": "Help me consolidate ballot comments and create a disposition document"
-    }]
-  }'
-```
-
-The skill includes:
-- 📋 Ballot tracking and approval calculations
-- 📝 Meeting agendas and minutes templates
-- 💬 Comment consolidation tools
-- 📊 Action item tracking
-- 📖 Complete IEEE process documentation
-
----
+Every message follows the P3394 Universal Message Format standard.
 
 ## Next Steps
 
-1. **Full Testing Guide**: See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive channel testing
-2. **Skills Documentation**: See [.claude/skills/README.md](.claude/skills/README.md) for skill details
-3. **Architecture Deep Dive**: See [CLAUDE.md](CLAUDE.md) for complete system architecture
-4. **Branch Status**: See [BRANCH_READY.md](BRANCH_READY.md) for merge preparation status
+- **[Full Documentation](./docs/)** - Detailed guides and API reference
+- **[Skill Development Guide](./.claude/skills/README.md)** - Create custom skills
+- **[P3394 Standard](https://ieee3394.org)** - Learn about the standard

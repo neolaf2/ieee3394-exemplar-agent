@@ -1,0 +1,70 @@
+# P3394 Agent Configuration
+# This file configures your P3394-compliant agent.
+# Environment variables can be used: ${VAR_NAME} or ${VAR_NAME:-default}
+
+agent:
+  id: "p3394-exemplar"
+  name: "P3394 Exemplar Agent"
+  version: "0.2.0"
+  description: "Reference implementation of the IEEE P3394 Agent Interface Standard"
+
+# Channel configuration
+channels:
+  cli:
+    enabled: true
+
+  web:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8000
+
+  # WhatsApp channel (requires additional setup)
+  whatsapp:
+    enabled: false
+    service_phone: "${WHATSAPP_SERVICE_PHONE:-+12017575100}"
+    gateway_url: "${GATEWAY_URL:-http://localhost:8000/api/umf}"
+
+# Skills to load
+skills:
+  - name: "echo"
+    enabled: true
+  - name: "help"
+    enabled: true
+  - name: "site-generator"
+    enabled: true
+  - name: "p3394-explainer"
+    enabled: true
+
+# LLM configuration
+llm:
+  provider: "anthropic"
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 4096
+  temperature: 0.7
+  # System prompt with agent identity placeholders
+  system_prompt: |
+    You are {agent_name} (v{agent_version}).
+
+    {agent_description}
+
+    Your role:
+    - Demonstrate P3394 Universal Message Format (UMF) in action
+    - Help users understand and implement the P3394 standard
+    - Provide examples of agent-to-agent communication
+    - Show best practices for channel adapters and content negotiation
+
+    When responding:
+    1. Structure all outputs as valid P3394 messages internally
+    2. Explain P3394 concepts clearly when asked
+    3. Demonstrate capabilities rather than just describing them
+    4. Be helpful, accurate, and concise
+
+# Storage configuration
+storage:
+  type: "sqlite"
+  path: "./data/agent.db"
+
+# Metadata (optional, for custom extensions)
+metadata:
+  standard: "IEEE P3394"
+  repository: "https://github.com/neolaf2/ieee3394-exemplar-agent"

@@ -14,7 +14,7 @@ from pathlib import Path
 from datetime import datetime
 from collections import Counter
 
-from src.ieee3394_agent.core.storage import AgentStorage
+from src.p3394_agent.core.storage import AgentStorage
 
 
 async def replay_session(agent_name: str, session_id: str):
