@@ -25,6 +25,7 @@ from .capability_registry import CapabilityRegistry
 from .capability_engine import CapabilityInvocationEngine
 from .capability_acl import CapabilityACLRegistry, CapabilityVisibility
 from .capability_access import CapabilityAccessManager
+from .capability_catalog import CapabilityCatalog
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -133,6 +134,13 @@ class AgentGateway:
             capability_registry=self.capability_registry
         )
 
+        # Capability Catalog: Unified view of all capabilities (system ↔ memory sync)
+        self.capability_catalog = CapabilityCatalog(
+            memory=memory,
+            working_dir=self.working_dir,
+            gateway=self
+        )
+
         self.capability_engine = CapabilityInvocationEngine(
             registry=self.capability_registry,
             gateway=self,
@@ -185,6 +193,9 @@ class AgentGateway:
 
         logger.info(f"Capability registry initialized with {self.capability_registry.count()} capabilities")
 
+        # NEW: Discover and catalog all capabilities (system → memory sync)
+        await self._initialize_capability_catalog()
+
     async def _bootstrap_builtin_acls(self):
         """
         Bootstrap built-in ACLs, principals, and credential bindings.
@@ -220,6 +231,50 @@ class AgentGateway:
         if self.memory:
             synced = await self.acl_registry.sync_to_memory()
             logger.info(f"Synced {synced} ACLs to memory server")
+
+    async def _initialize_capability_catalog(self):
+        """
+        Initialize the capability catalog (system ↔ memory synchronization).
+
+        This performs a top-down inspection of all available capabilities from:
+        - Commands (built-in and custom)
+        - Skills (.claude/skills/)
+        - Subagents (.claude/agents/)
+        - SDK tools (Read, Write, Bash, etc.)
+        - MCP servers and tools
+        - Hooks
+        - Channels
+
+        Then synchronizes with long-term memory so the agent "knows" its capabilities.
+        """
+        logger.info("Initializing capability catalog (system ↔ memory sync)...")
+
+        # Step 1: Load what agent already knows from memory
+        memory_count = await self.capability_catalog.load_from_memory()
+        logger.info(f"Loaded {memory_count} capabilities from memory")
+
+        # Step 2: Discover all capabilities from system (top-down inspection)
+        discovery_counts = await self.capability_catalog.discover_all()
+
+        # Step 3: Synchronize to memory (add new, update changed)
+        sync_results = await self.capability_catalog.sync_to_memory()
+
+        # Step 4: Report status
+        stats = self.capability_catalog.get_stats()
+        logger.info(
+            f"Capability catalog initialized: "
+            f"{stats['total']} total, "
+            f"{stats['sync_status']['in_both']} synced, "
+            f"{stats['sync_status']['only_system']} new, "
+            f"{stats['sync_status']['only_memory']} orphaned"
+        )
+
+        # Log any out-of-sync capabilities
+        out_of_sync = self.capability_catalog.list_out_of_sync()
+        if out_of_sync:
+            logger.warning(f"Found {len(out_of_sync)} capabilities out of sync")
+            for entry in out_of_sync[:5]:  # Log first 5
+                logger.warning(f"  - {entry.id}: in_system={entry.in_system}, in_memory={entry.in_memory}")
 
     def get_sdk_options(self) -> ClaudeAgentOptions:
         """

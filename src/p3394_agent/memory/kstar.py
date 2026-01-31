@@ -41,6 +41,8 @@ class KStarMemory:
         self.capability_acls: Dict[str, Dict[str, Any]] = {}
         self.principals: Dict[str, Dict[str, Any]] = {}
         self.credential_bindings: Dict[str, Dict[str, Any]] = {}
+        # Capability catalog - unified view of all agent capabilities
+        self.capability_catalog: Dict[str, Dict[str, Any]] = {}
 
     async def store_trace(self, trace: Dict[str, Any]) -> str:
         """
@@ -146,7 +148,8 @@ class KStarMemory:
             "skill_count": len(self.skills),
             "acl_count": len(self.capability_acls),
             "principal_count": len(self.principals),
-            "binding_count": len(self.credential_bindings)
+            "binding_count": len(self.credential_bindings),
+            "capability_catalog_count": len(self.capability_catalog)
         }
 
     # =========================================================================
@@ -357,3 +360,84 @@ class KStarMemory:
 
         logger.info(f"Loaded bootstrap data: {results}")
         return results
+
+    # =========================================================================
+    # Capability Catalog Storage (Agent Self-Knowledge)
+    # =========================================================================
+
+    async def store_capability_catalog_entry(self, entry: Dict[str, Any]) -> str:
+        """
+        Store a capability catalog entry.
+
+        The capability catalog is what the agent knows about its own capabilities.
+        This is synchronized with system truth (code, config, skills).
+
+        Args:
+            entry: Dict with capability entry data
+
+        Returns:
+            Entry ID
+        """
+        entry_id = entry.get("id")
+        if not entry_id:
+            raise ValueError("Catalog entry must have id")
+
+        self.capability_catalog[entry_id] = {
+            "stored_at": datetime.now(timezone.utc).isoformat(),
+            **entry
+        }
+        logger.debug(f"Stored capability catalog entry: {entry_id}")
+        return entry_id
+
+    async def get_capability_catalog_entry(self, entry_id: str) -> Optional[Dict[str, Any]]:
+        """Get a capability catalog entry by ID"""
+        return self.capability_catalog.get(entry_id)
+
+    async def list_capability_catalog_entries(self) -> List[Dict[str, Any]]:
+        """List all capability catalog entries"""
+        return list(self.capability_catalog.values())
+
+    async def delete_capability_catalog_entry(self, entry_id: str) -> bool:
+        """Delete a capability catalog entry"""
+        if entry_id in self.capability_catalog:
+            del self.capability_catalog[entry_id]
+            logger.debug(f"Deleted capability catalog entry: {entry_id}")
+            return True
+        return False
+
+    async def bulk_store_capability_catalog(self, entries: List[Dict[str, Any]]) -> int:
+        """
+        Bulk store capability catalog entries.
+
+        Args:
+            entries: List of capability entry definitions
+
+        Returns:
+            Number of entries stored
+        """
+        count = 0
+        for entry in entries:
+            try:
+                await self.store_capability_catalog_entry(entry)
+                count += 1
+            except Exception as e:
+                logger.warning(f"Failed to store catalog entry: {e}")
+        logger.info(f"Bulk stored {count} capability catalog entries")
+        return count
+
+    async def get_capability_catalog_stats(self) -> Dict[str, Any]:
+        """Get capability catalog statistics"""
+        by_type = {}
+        by_source = {}
+
+        for entry in self.capability_catalog.values():
+            cap_type = entry.get("type", "unknown")
+            source = entry.get("source", "unknown")
+            by_type[cap_type] = by_type.get(cap_type, 0) + 1
+            by_source[source] = by_source.get(source, 0) + 1
+
+        return {
+            "total": len(self.capability_catalog),
+            "by_type": by_type,
+            "by_source": by_source,
+        }

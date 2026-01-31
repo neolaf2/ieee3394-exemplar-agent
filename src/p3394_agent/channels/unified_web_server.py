@@ -199,6 +199,138 @@ class UnifiedWebServer:
                 "standard": "IEEE P3394"
             }
 
+        @api_router.get("/capabilities")
+        async def api_capabilities(session_id: Optional[str] = None, include_private: bool = False):
+            """
+            List all capabilities with their visibility and access control.
+
+            Args:
+                session_id: Optional session ID for authenticated access view
+                include_private: If true and admin, show private capabilities too
+            """
+            from ..core.capability_acl import CapabilityVisibility
+
+            session = None
+            if session_id:
+                session = self.gateway.session_manager.get_session(session_id)
+
+            capabilities = []
+
+            # List all capabilities from the registry
+            for cap_id, cap in self.gateway.capability_registry._capabilities.items():
+                acl = self.gateway.acl_registry.get_or_default(cap_id)
+
+                # Determine if visible based on session
+                is_visible = False
+                if acl.visibility == CapabilityVisibility.PUBLIC:
+                    is_visible = True
+                elif acl.visibility == CapabilityVisibility.LISTED:
+                    is_visible = session is not None
+                elif acl.visibility == CapabilityVisibility.ADMIN:
+                    is_visible = session and session.client_role == "admin"
+                elif acl.visibility == CapabilityVisibility.PRIVATE:
+                    is_visible = include_private and session and session.client_role == "admin"
+
+                if is_visible or include_private:
+                    capabilities.append({
+                        "id": cap_id,
+                        "name": cap.name,
+                        "kind": cap.kind.value,
+                        "substrate": cap.execution.substrate.value,
+                        "visibility": acl.visibility.value,
+                        "visible_to_you": is_visible,
+                        "description": cap.description or ""
+                    })
+
+            # Add ACLs for capabilities not in registry (core capabilities)
+            for acl in self.gateway.acl_registry.list_all():
+                if acl.capability_id not in self.gateway.capability_registry._capabilities:
+                    is_visible = False
+                    if acl.visibility == CapabilityVisibility.PUBLIC:
+                        is_visible = True
+                    elif acl.visibility == CapabilityVisibility.LISTED:
+                        is_visible = session is not None
+                    elif acl.visibility == CapabilityVisibility.ADMIN:
+                        is_visible = session and session.client_role == "admin"
+                    elif acl.visibility == CapabilityVisibility.PRIVATE:
+                        is_visible = include_private and session and session.client_role == "admin"
+
+                    if is_visible or include_private:
+                        capabilities.append({
+                            "id": acl.capability_id,
+                            "name": acl.capability_id,
+                            "kind": "core",
+                            "substrate": "internal",
+                            "visibility": acl.visibility.value,
+                            "visible_to_you": is_visible,
+                            "description": f"Core capability: {acl.capability_id}"
+                        })
+
+            return {
+                "count": len(capabilities),
+                "session_id": session.id if session else None,
+                "access_level": session.client_role if session else "anonymous",
+                "capabilities": sorted(capabilities, key=lambda x: (x["visibility"], x["id"]))
+            }
+
+        @api_router.get("/catalog")
+        async def api_catalog(
+            type_filter: Optional[str] = None,
+            source_filter: Optional[str] = None
+        ):
+            """
+            Get the capability catalog (system truth).
+
+            This is the complete view of all capabilities discovered from:
+            - Code (commands, core capabilities)
+            - Configuration (agent.yaml, settings.json)
+            - Skills directory (.claude/skills/)
+            - Subagents directory (.claude/agents/)
+            - MCP servers
+            - Hooks
+
+            Args:
+                type_filter: Filter by type (command, skill, subagent, tool, etc.)
+                source_filter: Filter by source (builtin, sdk, skill, config, etc.)
+            """
+            entries = self.gateway.capability_catalog.list_all()
+
+            # Apply filters
+            if type_filter:
+                entries = [e for e in entries if e.type.value == type_filter]
+            if source_filter:
+                entries = [e for e in entries if e.source.value == source_filter]
+
+            return {
+                "stats": self.gateway.capability_catalog.get_stats(),
+                "count": len(entries),
+                "entries": [
+                    {
+                        "id": e.id,
+                        "name": e.name,
+                        "type": e.type.value,
+                        "source": e.source.value,
+                        "description": e.description,
+                        "enabled": e.enabled,
+                        "in_memory": e.in_memory,
+                        "in_system": e.in_system,
+                    }
+                    for e in sorted(entries, key=lambda x: (x.type.value, x.id))
+                ]
+            }
+
+        @api_router.get("/catalog/manifest")
+        async def api_catalog_manifest():
+            """
+            Export the capability catalog as a manifest document.
+
+            This can be used for:
+            - Agent configuration backup
+            - Sharing capability profiles
+            - Factory agent processes
+            """
+            return self.gateway.capability_catalog.to_manifest()
+
         @api_router.post("/message")
         async def api_send_message(request: Request):
             """Send a text message"""
@@ -294,8 +426,14 @@ class UnifiedWebServer:
                 session = self.gateway.session_manager.get_session(session_id)
 
             # Determine visible commands (filter by visibility)
+            # Use dict to deduplicate commands (some have aliases)
             visible_commands = []
-            for cmd in set(self.gateway.commands.values()):
+            seen_commands = set()
+            for cmd in self.gateway.commands.values():
+                if cmd.name in seen_commands:
+                    continue
+                seen_commands.add(cmd.name)
+
                 cap_id = f"legacy.command.{cmd.name.lstrip('/')}"
                 acl = self.gateway.acl_registry.get_or_default(cap_id)
 
