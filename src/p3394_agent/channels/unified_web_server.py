@@ -278,7 +278,9 @@ class UnifiedWebServer:
             type_filter: Optional[str] = None,
             source_filter: Optional[str] = None,
             power_level: Optional[str] = None,
-            safe_for_client: bool = False
+            cognitive_pattern: Optional[str] = None,
+            safe_for_client: bool = False,
+            methodological_only: bool = False
         ):
             """
             Get the capability catalog (system truth).
@@ -295,11 +297,15 @@ class UnifiedWebServer:
                 type_filter: Filter by type (command, skill, subagent, tool, etc.)
                 source_filter: Filter by source (builtin, sdk, skill, config, etc.)
                 power_level: Filter by power level (standard, meta, self_modifying, bootstrap)
+                cognitive_pattern: Filter by cognitive pattern (execution, procedural, iterative, diagnostic, generative, orchestration, reflective)
                 safe_for_client: If true, only return capabilities safe for client principals
+                methodological_only: If true, only return non-execution cognitive patterns
             """
-            # Get entries based on safe_for_client flag
+            # Get entries based on flags
             if safe_for_client:
                 entries = self.gateway.capability_catalog.list_safe_for_client()
+            elif methodological_only:
+                entries = self.gateway.capability_catalog.list_methodological_skills()
             else:
                 entries = self.gateway.capability_catalog.list_all()
 
@@ -310,6 +316,8 @@ class UnifiedWebServer:
                 entries = [e for e in entries if e.source.value == source_filter]
             if power_level:
                 entries = [e for e in entries if e.power_level.value == power_level]
+            if cognitive_pattern:
+                entries = [e for e in entries if e.cognitive_pattern.value == cognitive_pattern]
 
             return {
                 "stats": self.gateway.capability_catalog.get_stats(),
@@ -323,6 +331,7 @@ class UnifiedWebServer:
                         "description": e.description,
                         "enabled": e.enabled,
                         "power_level": e.power_level.value,
+                        "cognitive_pattern": e.cognitive_pattern.value,
                         "in_memory": e.in_memory,
                         "in_system": e.in_system,
                     }

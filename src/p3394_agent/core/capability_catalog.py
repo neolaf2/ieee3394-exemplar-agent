@@ -88,6 +88,31 @@ class CapabilityPowerLevel(str, Enum):
     BOOTSTRAP = "bootstrap"         # Level 3: Factory-essential, system-level
 
 
+class CognitivePattern(str, Enum):
+    """
+    Cognitive pattern taxonomy for capabilities.
+
+    This classifies HOW a capability operates (its methodology):
+    - EXECUTION: Single-shot task, direct output
+    - PROCEDURAL: Step-by-step workflow
+    - ITERATIVE: Loop until condition/completion
+    - DIAGNOSTIC: Hypothesis → test → refine cycle
+    - GENERATIVE: Divergent ideation, creative exploration
+    - ORCHESTRATION: Coordinates multiple capabilities
+    - REFLECTIVE: Self-monitoring, quality gates
+
+    This is orthogonal to power_level (WHAT it can access).
+    Example: ralph-loop is ITERATIVE pattern but STANDARD power.
+    """
+    EXECUTION = "execution"         # Single-shot task, direct output
+    PROCEDURAL = "procedural"       # Step-by-step workflow
+    ITERATIVE = "iterative"         # Loop until condition met
+    DIAGNOSTIC = "diagnostic"       # Hypothesis → test → refine
+    GENERATIVE = "generative"       # Divergent ideation
+    ORCHESTRATION = "orchestration" # Coordinates multiple capabilities
+    REFLECTIVE = "reflective"       # Self-monitoring, quality gates
+
+
 # Classification of known capabilities by power level
 POWER_LEVEL_CLASSIFICATIONS = {
     # BOOTSTRAP level - SDK and factory essentials
@@ -139,6 +164,76 @@ def classify_power_level(capability_id: str) -> CapabilityPowerLevel:
     return CapabilityPowerLevel.STANDARD
 
 
+# Classification of known capabilities by cognitive pattern
+COGNITIVE_PATTERN_CLASSIFICATIONS = {
+    # ITERATIVE - Loop until condition/completion
+    CognitivePattern.ITERATIVE: {
+        "skill.ralph-loop", "skill.verification-before-completion",
+        "skill.progressive-discovery",
+    },
+    # DIAGNOSTIC - Hypothesis → test → refine
+    CognitivePattern.DIAGNOSTIC: {
+        "skill.systematic-debugging", "skill.test-driven-development",
+        "skill.root-cause-tracing",
+    },
+    # GENERATIVE - Divergent ideation
+    CognitivePattern.GENERATIVE: {
+        "skill.brainstorming", "skill.scientific-brainstorming",
+        "skill.writing-plans",
+    },
+    # ORCHESTRATION - Coordinates multiple capabilities
+    CognitivePattern.ORCHESTRATION: {
+        "skill.dispatching-parallel-agents", "skill.subagent-driven-development",
+        "skill.executing-plans", "tool.sdk.task",
+        "core.skill_dispatch", "core.subagent_dispatch",
+    },
+    # REFLECTIVE - Self-monitoring, quality gates
+    CognitivePattern.REFLECTIVE: {
+        "skill.code-review", "skill.requesting-code-review",
+        "skill.receiving-code-review", "skill.verification-before-completion",
+    },
+    # PROCEDURAL - Step-by-step workflow
+    CognitivePattern.PROCEDURAL: {
+        "skill.skill-creator", "skill.skill-creation-guide",
+        "skill.site-generator", "skill.agent-development",
+        "skill.Hook Development", "skill.mcp-builder",
+        "skill.frontend-design", "skill.finishing-a-development-branch",
+    },
+    # EXECUTION is the default for task-specific skills
+}
+
+
+def classify_cognitive_pattern(capability_id: str) -> CognitivePattern:
+    """
+    Classify a capability's cognitive pattern based on its ID.
+
+    Checks against known classifications, defaults to EXECUTION.
+    """
+    for pattern, ids in COGNITIVE_PATTERN_CLASSIFICATIONS.items():
+        if capability_id in ids:
+            return pattern
+
+    # Check patterns by keywords
+    if "debug" in capability_id.lower() or "diagnos" in capability_id.lower():
+        return CognitivePattern.DIAGNOSTIC
+    if "brainstorm" in capability_id.lower() or "ideation" in capability_id.lower():
+        return CognitivePattern.GENERATIVE
+    if "loop" in capability_id.lower() or "progressive" in capability_id.lower():
+        return CognitivePattern.ITERATIVE
+    if "review" in capability_id.lower() or "verification" in capability_id.lower():
+        return CognitivePattern.REFLECTIVE
+    if "dispatch" in capability_id.lower() or "parallel" in capability_id.lower():
+        return CognitivePattern.ORCHESTRATION
+    if "workflow" in capability_id.lower() or "wizard" in capability_id.lower():
+        return CognitivePattern.PROCEDURAL
+
+    # Commands and simple tools default to EXECUTION
+    if capability_id.startswith("command.") or capability_id.startswith("tool."):
+        return CognitivePattern.EXECUTION
+
+    return CognitivePattern.EXECUTION
+
+
 @dataclass
 class CatalogEntry:
     """Entry in the capability catalog"""
@@ -150,8 +245,11 @@ class CatalogEntry:
     version: str = "1.0.0"                     # Version
     enabled: bool = True                       # Is it enabled?
 
-    # Power level classification
+    # Power level classification (WHAT it can access)
     power_level: CapabilityPowerLevel = CapabilityPowerLevel.STANDARD
+
+    # Cognitive pattern classification (HOW it operates)
+    cognitive_pattern: CognitivePattern = CognitivePattern.EXECUTION
 
     # Source location
     source_path: Optional[str] = None          # File path if applicable
@@ -169,10 +267,13 @@ class CatalogEntry:
     in_system: bool = True                     # Is it in the system?
 
     def __post_init__(self):
-        """Auto-classify power level if not explicitly set"""
+        """Auto-classify power level and cognitive pattern if not explicitly set"""
         if self.power_level == CapabilityPowerLevel.STANDARD:
             # Check if this capability should have a higher power level
             self.power_level = classify_power_level(self.id)
+        if self.cognitive_pattern == CognitivePattern.EXECUTION:
+            # Check if this capability has a different cognitive pattern
+            self.cognitive_pattern = classify_cognitive_pattern(self.id)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary"""
@@ -185,6 +286,7 @@ class CatalogEntry:
             "version": self.version,
             "enabled": self.enabled,
             "power_level": self.power_level.value,
+            "cognitive_pattern": self.cognitive_pattern.value,
             "source_path": self.source_path,
             "source_module": self.source_module,
             "metadata": self.metadata,
@@ -205,6 +307,14 @@ class CatalogEntry:
             except ValueError:
                 pass
 
+        # Parse cognitive pattern, defaulting to EXECUTION
+        cognitive_pattern = CognitivePattern.EXECUTION
+        if data.get("cognitive_pattern"):
+            try:
+                cognitive_pattern = CognitivePattern(data["cognitive_pattern"])
+            except ValueError:
+                pass
+
         return cls(
             id=data["id"],
             name=data["name"],
@@ -214,6 +324,7 @@ class CatalogEntry:
             version=data.get("version", "1.0.0"),
             enabled=data.get("enabled", True),
             power_level=power_level,
+            cognitive_pattern=cognitive_pattern,
             source_path=data.get("source_path"),
             source_module=data.get("source_module"),
             metadata=data.get("metadata", {}),
@@ -734,16 +845,64 @@ class CapabilityCatalog:
         """List bootstrap-essential capabilities for agent factory"""
         return self.list_by_power_level(CapabilityPowerLevel.BOOTSTRAP)
 
+    # =========================================================================
+    # COGNITIVE PATTERN QUERIES
+    # =========================================================================
+
+    def list_by_cognitive_pattern(self, pattern: CognitivePattern) -> List[CatalogEntry]:
+        """
+        List entries by cognitive pattern.
+
+        Cognitive patterns describe HOW a capability operates:
+        - EXECUTION: Single-shot task, direct output
+        - PROCEDURAL: Step-by-step workflow
+        - ITERATIVE: Loop until condition met
+        - DIAGNOSTIC: Hypothesis → test → refine
+        - GENERATIVE: Divergent ideation
+        - ORCHESTRATION: Coordinates multiple capabilities
+        - REFLECTIVE: Self-monitoring, quality gates
+        """
+        return [e for e in self._entries.values() if e.cognitive_pattern == pattern]
+
+    def list_methodological_skills(self) -> List[CatalogEntry]:
+        """
+        List skills with non-execution cognitive patterns.
+
+        These are the 'hidden' methodology skills that guide HOW the agent thinks.
+        """
+        return [
+            e for e in self._entries.values()
+            if e.cognitive_pattern != CognitivePattern.EXECUTION and e.enabled
+        ]
+
+    def list_iterative_skills(self) -> List[CatalogEntry]:
+        """List iterative skills (loop until condition)"""
+        return self.list_by_cognitive_pattern(CognitivePattern.ITERATIVE)
+
+    def list_diagnostic_skills(self) -> List[CatalogEntry]:
+        """List diagnostic skills (hypothesis → test → refine)"""
+        return self.list_by_cognitive_pattern(CognitivePattern.DIAGNOSTIC)
+
+    def list_generative_skills(self) -> List[CatalogEntry]:
+        """List generative skills (divergent ideation)"""
+        return self.list_by_cognitive_pattern(CognitivePattern.GENERATIVE)
+
+    def list_orchestration_skills(self) -> List[CatalogEntry]:
+        """List orchestration skills (coordinate multiple capabilities)"""
+        return self.list_by_cognitive_pattern(CognitivePattern.ORCHESTRATION)
+
     def get_stats(self) -> Dict[str, Any]:
         """Get catalog statistics"""
         by_type = {}
         by_source = {}
         by_power_level = {}
+        by_cognitive_pattern = {}
 
         for entry in self._entries.values():
             by_type[entry.type.value] = by_type.get(entry.type.value, 0) + 1
             by_source[entry.source.value] = by_source.get(entry.source.value, 0) + 1
             by_power_level[entry.power_level.value] = by_power_level.get(entry.power_level.value, 0) + 1
+            by_cognitive_pattern[entry.cognitive_pattern.value] = by_cognitive_pattern.get(entry.cognitive_pattern.value, 0) + 1
 
         in_both = sum(1 for e in self._entries.values() if e.in_memory and e.in_system)
         only_system = sum(1 for e in self._entries.values() if e.in_system and not e.in_memory)
@@ -754,6 +913,7 @@ class CapabilityCatalog:
             "by_type": by_type,
             "by_source": by_source,
             "by_power_level": by_power_level,
+            "by_cognitive_pattern": by_cognitive_pattern,
             "enabled": sum(1 for e in self._entries.values() if e.enabled),
             "sync_status": {
                 "in_both": in_both,

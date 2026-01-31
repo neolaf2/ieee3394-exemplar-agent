@@ -96,6 +96,74 @@ Power levels classify capabilities by their potential impact on the agent:
 - **Service principals**: STANDARD + META + controlled SELF_MODIFYING
 - **Admin/System**: All levels
 
+### Cognitive Patterns
+
+Cognitive patterns classify HOW a capability operates (its methodology). This is orthogonal to power level (WHAT it can access).
+
+| Pattern | Description | Examples |
+|---------|-------------|----------|
+| `execution` | Single-shot task, direct output | echo, pdf, docx |
+| `procedural` | Step-by-step workflow | skill-creator, site-generator |
+| `iterative` | Loop until condition met | ralph-loop, progressive-discovery |
+| `diagnostic` | Hypothesis → test → refine | systematic-debugging, TDD |
+| `generative` | Divergent ideation | brainstorming |
+| `orchestration` | Coordinates multiple capabilities | dispatching-parallel-agents |
+| `reflective` | Self-monitoring, quality gates | code-review, verification |
+
+#### Cognitive Pattern Classification
+
+```python
+# ITERATIVE - Loop until condition/completion
+"skill.ralph-loop", "skill.verification-before-completion"
+
+# DIAGNOSTIC - Hypothesis → test → refine
+"skill.systematic-debugging", "skill.test-driven-development"
+
+# GENERATIVE - Divergent ideation
+"skill.brainstorming", "skill.scientific-brainstorming"
+
+# ORCHESTRATION - Coordinates multiple capabilities
+"skill.dispatching-parallel-agents", "skill.subagent-driven-development"
+
+# REFLECTIVE - Self-monitoring, quality gates
+"skill.code-review", "skill.requesting-code-review"
+
+# PROCEDURAL - Step-by-step workflow
+"skill.skill-creator", "skill.site-generator", "skill.mcp-builder"
+
+# EXECUTION - Default for task-specific skills
+"skill.echo", "skill.pdf", "skill.docx"
+```
+
+#### Two-Dimensional Classification
+
+Capabilities are classified on two dimensions:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│           Capability Classification Matrix                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   Power Level (WHAT)          Cognitive Pattern (HOW)           │
+│   ─────────────────           ───────────────────────           │
+│   STANDARD      ───────────── execution, procedural             │
+│   META          ───────────── orchestration, diagnostic         │
+│   SELF_MODIFYING ────────────  procedural + state mutation      │
+│   BOOTSTRAP     ───────────── foundation tools                  │
+│                                                                  │
+│   Examples:                                                      │
+│   ┌─────────────────┬─────────────────┬───────────────────┐    │
+│   │ Capability      │ Power Level     │ Cognitive Pattern │    │
+│   ├─────────────────┼─────────────────┼───────────────────┤    │
+│   │ ralph-loop      │ STANDARD        │ iterative         │    │
+│   │ systematic-debug│ META            │ diagnostic        │    │
+│   │ skill-creator   │ SELF_MODIFYING  │ procedural        │    │
+│   │ brainstorming   │ META            │ generative        │    │
+│   │ pdf             │ STANDARD        │ execution         │    │
+│   └─────────────────┴─────────────────┴───────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## Discovery Process
 
 ### Startup Discovery
@@ -156,12 +224,13 @@ class CatalogEntry:
     version: str               # Capability version
     enabled: bool              # Is it enabled?
     power_level: PowerLevel    # standard, meta, self_modifying, bootstrap
+    cognitive_pattern: Pattern # execution, procedural, iterative, diagnostic, etc.
     source_path: str           # File path if applicable
     in_memory: bool            # Synced to KSTAR memory?
     in_system: bool            # Found in system?
 ```
 
-Power levels are auto-classified based on capability ID when not explicitly set.
+Both power_level and cognitive_pattern are auto-classified based on capability ID when not explicitly set.
 
 ## API Reference
 
@@ -182,6 +251,12 @@ GET /api/catalog?power_level=standard
 
 # Get only client-safe capabilities (STANDARD level only)
 GET /api/catalog?safe_for_client=true
+
+# Filter by cognitive pattern
+GET /api/catalog?cognitive_pattern=iterative
+
+# Get only methodological skills (non-execution patterns)
+GET /api/catalog?methodological_only=true
 
 # Combine filters
 GET /api/catalog?type_filter=skill&power_level=meta
@@ -214,6 +289,15 @@ GET /api/catalog/manifest
             "self_modifying": 3,
             "bootstrap": 0
         },
+        "by_cognitive_pattern": {
+            "execution": 40,
+            "procedural": 5,
+            "iterative": 2,
+            "diagnostic": 2,
+            "generative": 2,
+            "orchestration": 1,
+            "reflective": 1
+        },
         "enabled": 53,
         "sync_status": {
             "in_both": 53,
@@ -231,6 +315,7 @@ GET /api/catalog/manifest
             "description": "Show available commands and capabilities",
             "enabled": true,
             "power_level": "standard",
+            "cognitive_pattern": "execution",
             "in_memory": true,
             "in_system": true
         }
