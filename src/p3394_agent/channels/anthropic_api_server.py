@@ -366,7 +366,7 @@ class AnthropicAPIServerAdapter:
     async def start(self):
         """Start the Anthropic API server"""
         self.is_active = True
-        self.gateway.register_channel(self.channel_id, self)
+        await self.gateway.register_channel(self.channel_id, self)
 
         logger.info(f"Anthropic API Server Adapter started on http://{self.host}:{self.port}")
 

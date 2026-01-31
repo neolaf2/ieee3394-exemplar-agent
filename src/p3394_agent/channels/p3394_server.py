@@ -451,7 +451,7 @@ class P3394ServerAdapter(ChannelAdapter):
     async def start(self):
         """Start the P3394 server"""
         self.is_active = True
-        self.gateway.register_channel(self.channel_id, self)
+        await self.gateway.register_channel(self.channel_id, self)
 
         logger.info(f"P3394 Server Adapter started on http://{self.host}:{self.port}")
         logger.info(f"P3394 Address: {self.agent_address.to_uri()}")

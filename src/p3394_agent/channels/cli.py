@@ -226,7 +226,7 @@ class CLIChannelAdapter(ChannelAdapter):
         os.chmod(self.socket_path, 0o666)
 
         self.is_active = True
-        self.gateway.register_channel(self.channel_id, self)
+        await self.gateway.register_channel(self.channel_id, self)
 
         logger.info(f"CLI Channel Adapter started on {self.socket_path}")
 

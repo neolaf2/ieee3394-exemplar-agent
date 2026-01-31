@@ -649,3 +649,71 @@ class CapabilityCatalog:
                 for entry in self._entries.values()
             }
         }
+
+    # =========================================================================
+    # INCREMENTAL UPDATES
+    # =========================================================================
+
+    async def refresh_channels(self) -> int:
+        """
+        Refresh channel discovery and sync to memory.
+
+        Call this after channels are registered (which happens after initialize()).
+        Returns count of channels discovered.
+        """
+        count = await self._discover_channels()
+
+        if count > 0:
+            # Sync new channel entries to memory
+            for entry_id, entry in self._entries.items():
+                if entry.type == CapabilityType.CHANNEL and not entry.in_memory:
+                    await self.memory.store_capability_catalog_entry(entry.to_dict())
+                    entry.in_memory = True
+
+            logger.info(f"Refreshed {count} channel(s) in catalog")
+
+        return count
+
+    async def add_capability(self, entry: CatalogEntry, sync_to_memory: bool = True) -> str:
+        """
+        Add a single capability to the catalog.
+
+        Use this for dynamic capability registration (e.g., learned capabilities).
+
+        Args:
+            entry: The catalog entry to add
+            sync_to_memory: Whether to immediately sync to memory
+
+        Returns:
+            The entry ID
+        """
+        self._entries[entry.id] = entry
+
+        if sync_to_memory:
+            await self.memory.store_capability_catalog_entry(entry.to_dict())
+            entry.in_memory = True
+
+        logger.debug(f"Added capability to catalog: {entry.id}")
+        return entry.id
+
+    async def remove_capability(self, entry_id: str, sync_to_memory: bool = True) -> bool:
+        """
+        Remove a capability from the catalog.
+
+        Args:
+            entry_id: The ID of the capability to remove
+            sync_to_memory: Whether to immediately sync to memory
+
+        Returns:
+            True if removed, False if not found
+        """
+        if entry_id not in self._entries:
+            return False
+
+        del self._entries[entry_id]
+
+        if sync_to_memory:
+            await self.memory.delete_capability_catalog_entry(entry_id)
+
+        logger.debug(f"Removed capability from catalog: {entry_id}")
+        return True

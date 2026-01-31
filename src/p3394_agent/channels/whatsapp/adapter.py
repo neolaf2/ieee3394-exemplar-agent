@@ -297,7 +297,7 @@ class WhatsAppChannelAdapter(ChannelAdapter):
                 logger.warning("WhatsApp bridge connected but not authenticated")
 
             self.is_active = True
-            self.gateway.register_channel(self.channel_id, self)
+            await self.gateway.register_channel(self.channel_id, self)
 
             # Start message listener
             await self._listen_for_messages()

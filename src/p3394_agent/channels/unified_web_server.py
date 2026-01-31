@@ -1035,8 +1035,8 @@ class UnifiedWebServer:
         """Start the unified web server"""
         self.is_active = True
 
-        # Register as a channel
-        self.gateway.register_channel("unified-web", self)
+        # Register as a channel (async to update capability catalog)
+        await self.gateway.register_channel("unified-web", self)
 
         logger.info(f"Unified Web Server started on http://{self.host}:{self.port}")
         logger.info(f"  Web Chat: http://{self.host}:{self.port}/chat")

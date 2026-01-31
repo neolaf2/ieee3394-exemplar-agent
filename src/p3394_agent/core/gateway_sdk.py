@@ -420,10 +420,19 @@ When responding:
         for alias in command.aliases:
             self.commands[alias] = command
 
-    def register_channel(self, channel_id: str, adapter: Any):
-        """Register a channel adapter"""
+    async def register_channel(self, channel_id: str, adapter: Any):
+        """
+        Register a channel adapter and update capability catalog.
+
+        This is async to allow updating the capability catalog after
+        the channel is registered.
+        """
         self.channels[channel_id] = adapter
         logger.info(f"Registered channel: {channel_id}")
+
+        # Update capability catalog with new channel
+        if self.capability_catalog:
+            await self.capability_catalog.refresh_channels()
 
     def register_skill(self, skill_name: str, skill_definition: Any):
         """Register a skill"""
