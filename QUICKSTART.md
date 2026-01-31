@@ -2,11 +2,25 @@
 
 Get your P3394-compliant agent running in 5 minutes.
 
+> **Using Claude Code?** Run `/agent-factory` for a guided 30-minute setup experience.
+
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://github.com/astral-sh/uv) package manager
 - Anthropic API key
+
+## Step 0: Clone the Template
+
+```bash
+# Latest release
+git clone --branch v0.2.0 https://github.com/neolaf2/ieee3394-exemplar-agent.git my-agent
+cd my-agent
+
+# Or latest development
+git clone https://github.com/neolaf2/ieee3394-exemplar-agent.git my-agent
+cd my-agent
+```
 
 ## Step 1: Install Dependencies
 
@@ -248,6 +262,16 @@ Every message follows the P3394 Universal Message Format standard.
 
 ## Next Steps
 
-- **[Full Documentation](./docs/)** - Detailed guides and API reference
-- **[Skill Development Guide](./.claude/skills/README.md)** - Create custom skills
-- **[P3394 Standard](https://ieee3394.org)** - Learn about the standard
+| Goal | Resource |
+|------|----------|
+| Full installation guide | [INSTALLATION.md](./INSTALLATION.md) |
+| Add custom skills | [.claude/skills/README.md](./.claude/skills/README.md) |
+| Build Companion or Task agents | [docs/SDK_DEVELOPER_GUIDE.md](./docs/SDK_DEVELOPER_GUIDE.md) |
+| Configure authentication | [docs/CHANNEL_BINDING.md](./docs/CHANNEL_BINDING.md) |
+| MCP integration | [docs/MCP_CHANNEL.md](./docs/MCP_CHANNEL.md) |
+| Guided setup (Claude Code) | `/agent-factory` skill |
+
+## Learn More
+
+- **[P3394 Standard](https://ieee3394.org)** - Learn about the IEEE standard
+- **[Architecture Spec](./CLAUDE.md)** - Complete architecture documentation

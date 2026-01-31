@@ -2,6 +2,29 @@
 
 This directory contains skills that extend the agent's capabilities for domain-specific tasks.
 
+## Template Skills (Essential)
+
+These skills should be included in any P3394 agent deployment:
+
+| Skill | Purpose | Category |
+|-------|---------|----------|
+| **echo** | Simple echo for testing | Core |
+| **help** | Contextual help system | Core |
+| **p3394-explainer** | Explains P3394 concepts | Education |
+| **agent-factory** | Guided agent creation | Meta |
+
+## Optional Skills (Examples)
+
+These skills demonstrate capabilities but can be removed for minimal deployments:
+
+| Skill | Purpose | When to Include |
+|-------|---------|-----------------|
+| site-generator | Generate static HTML | Website deployments |
+| ieee-wg-manager | IEEE WG processes | IEEE standards work |
+| docx, pdf, pptx | Document generation | Document workflows |
+| skill-creator | Create new skills | Skill development |
+| whatsapp-config | WhatsApp channel setup | WhatsApp deployments |
+
 ## Installed Skills
 
 ### Admin-Only Skills
