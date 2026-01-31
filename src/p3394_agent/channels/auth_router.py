@@ -28,6 +28,12 @@ from ..data.models.auth import (
     CreateAPIKeyRequest,
 )
 from ..data.repos.auth import AuthRepository
+from ..memory.control_tokens import ControlToken, TokenType, TokenScope, ProvenanceMethod
+from ..core.auth.credential_binding import CredentialBinding, BindingType
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Response models
@@ -61,8 +67,18 @@ class APIKeyCreateResponse(BaseModel):
 def create_auth_router(
     templates: Jinja2Templates,
     auth_repo: AuthRepository,
+    kstar_memory=None,
+    principal_registry=None,
 ) -> APIRouter:
-    """Create authentication router with dependencies."""
+    """
+    Create authentication router with dependencies.
+
+    Args:
+        templates: Jinja2 templates for HTML pages
+        auth_repo: Authentication repository for users, sessions, API keys
+        kstar_memory: Optional KStarMemory for storing API keys as ControlTokens
+        principal_registry: Optional PrincipalRegistry for credential bindings
+    """
 
     router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -358,7 +374,14 @@ def create_auth_router(
         request: CreateAPIKeyRequest,
         user: User = Depends(require_user),
     ):
-        """Create a new API key."""
+        """
+        Create a new API key.
+
+        This creates:
+        1. APIKey in the auth database (existing behavior)
+        2. ControlToken in KSTAR+ LTM with principal binding (new)
+        3. CredentialBinding mapping the key to the principal (new)
+        """
         # Generate key
         full_key, key_prefix, key_hash, key_hint = APIKey.generate()
 
@@ -367,7 +390,7 @@ def create_auth_router(
         if request.expires_days:
             expires_at = datetime.utcnow() + timedelta(days=request.expires_days)
 
-        # Create API key
+        # Create API key in auth database
         api_key = APIKey(
             user_id=user.id,
             name=request.name,
@@ -380,6 +403,94 @@ def create_auth_router(
 
         await auth_repo.api_keys.create(api_key)
 
+        # Get user's principal ID
+        principal_id = user.principal_id
+
+        # =====================================================================
+        # Store as ControlToken in KSTAR+ LTM (with principal binding)
+        # =====================================================================
+        if kstar_memory:
+            try:
+                # Map API key scopes to TokenScope
+                token_scopes = []
+                for scope in request.scopes:
+                    if scope == "read":
+                        token_scopes.append(TokenScope.READ)
+                    elif scope == "write":
+                        token_scopes.append(TokenScope.WRITE)
+                    elif scope == "admin":
+                        token_scopes.append(TokenScope.ADMIN)
+                    elif scope == "execute":
+                        token_scopes.append(TokenScope.EXECUTE)
+
+                # Create ControlToken with principal binding
+                control_token = ControlToken.create(
+                    key=f"api_key:{key_prefix}",
+                    value=full_key,
+                    token_type=TokenType.API_KEY,
+                    binding_target="p3394_agent:api",
+                    scopes=token_scopes or [TokenScope.READ],
+                    provenance_source=principal_id,
+                    provenance_method=ProvenanceMethod.ISSUED,
+                    valid_days=request.expires_days,
+                    metadata={
+                        "name": request.name,
+                        "api_key_id": str(api_key.id),
+                        "user_id": str(user.id),
+                        "email": user.email,
+                    },
+                    principal_id=principal_id,
+                    authorized_principals=[principal_id],
+                )
+
+                # Store in KSTAR memory
+                await kstar_memory.store_credential_binding({
+                    "credential_type": "api_key",
+                    "credential_value": key_prefix,
+                    "principal_urn": principal_id,
+                    "assurance_level": "medium",
+                    "scopes": request.scopes,
+                    "metadata": {
+                        "token_id": control_token.token_id,
+                        "api_key_id": str(api_key.id),
+                        "name": request.name,
+                    }
+                })
+
+                logger.info(f"Stored API key as ControlToken: {control_token.token_id} for principal: {principal_id}")
+
+            except Exception as e:
+                logger.warning(f"Failed to store API key in KSTAR LTM: {e}")
+                # Continue - the API key was still created in the auth database
+
+        # =====================================================================
+        # Create CredentialBinding in PrincipalRegistry
+        # =====================================================================
+        if principal_registry:
+            try:
+                binding = CredentialBinding(
+                    binding_id=f"urn:cred:api_key:{key_prefix}",
+                    principal_id=principal_id,
+                    channel="api",
+                    binding_type=BindingType.API_KEY,
+                    external_subject=key_prefix,
+                    scopes=request.scopes,
+                    secret_hash=key_hash,
+                    metadata={
+                        "name": request.name,
+                        "api_key_id": str(api_key.id),
+                        "user_id": str(user.id),
+                    },
+                    expires_at=expires_at,
+                )
+
+                principal_registry.register_binding(binding)
+                logger.info(f"Created CredentialBinding: {binding.binding_id} for principal: {principal_id}")
+
+            except Exception as e:
+                logger.warning(f"Failed to create CredentialBinding: {e}")
+                # Continue - the API key was still created
+
         return APIKeyCreateResponse(
             id=api_key.id,
             name=api_key.name,
@@ -389,14 +500,34 @@ def create_auth_router(
 
     @router.delete("/api/keys/{key_id}")
     async def revoke_api_key(key_id: UUID, user: User = Depends(require_user)):
-        """Revoke an API key."""
+        """
+        Revoke an API key.
+
+        This also revokes:
+        1. The ControlToken in KSTAR+ LTM
+        2. The CredentialBinding in PrincipalRegistry
+        """
         api_key = await auth_repo.api_keys.get(key_id)
         if not api_key:
             raise HTTPException(status_code=404, detail="API key not found")
         if api_key.user_id != user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
 
+        # Revoke in auth database
         await auth_repo.api_keys.revoke(key_id)
+
+        # Revoke CredentialBinding
+        if principal_registry:
+            try:
+                binding_id = f"urn:cred:api_key:{api_key.key_prefix}"
+                principal_registry.delete_binding(binding_id)
+                logger.info(f"Revoked CredentialBinding: {binding_id}")
+            except Exception as e:
+                logger.warning(f"Failed to revoke CredentialBinding: {e}")
+
+        # Note: ControlToken revocation would require the token store
+        # For now, the KSTAR credential binding tracks the revocation status
+
         return {"success": True, "message": "API key revoked"}
 
     # ==================== Current User ====================

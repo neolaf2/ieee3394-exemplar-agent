@@ -604,7 +604,12 @@ class UnifiedWebServer:
         # =====================================================================
 
         if self.templates:
-            auth_router = create_auth_router(self.templates, self.auth_repo)
+            auth_router = create_auth_router(
+                self.templates,
+                self.auth_repo,
+                kstar_memory=self.gateway.memory,
+                principal_registry=self.gateway.principal_registry,
+            )
             self.app.include_router(auth_router)
             logger.info("Auth router mounted at /auth")
 

@@ -204,6 +204,10 @@ class ControlToken:
     parent_token_id: Optional[str] = None    # If delegated from another token
     child_token_ids: List[str] = field(default_factory=list)  # Tokens derived from this
 
+    # Principal binding (who is authorized to use this token)
+    principal_id: Optional[str] = None       # Primary principal URN that owns this token
+    authorized_principals: List[str] = field(default_factory=list)  # Additional authorized principals
+
     def is_valid(self) -> bool:
         """Check if token is currently valid"""
         now = datetime.now(timezone.utc)
@@ -248,6 +252,35 @@ class ControlToken:
         computed_hash = hashlib.sha256(value.encode()).hexdigest()
         return computed_hash == self.value_hash
 
+    def is_authorized_principal(self, principal_id: str) -> bool:
+        """
+        Check if a principal is authorized to use this token.
+
+        A principal is authorized if:
+        1. They are the owner (self.principal_id)
+        2. They are in the authorized_principals list
+        3. No principal restrictions are set (principal_id is None)
+
+        Args:
+            principal_id: The principal URN to check
+
+        Returns:
+            True if the principal is authorized
+        """
+        # If no principal restriction, token is usable by anyone with the value
+        if self.principal_id is None and not self.authorized_principals:
+            return True
+
+        # Check if owner
+        if self.principal_id == principal_id:
+            return True
+
+        # Check if in authorized list
+        if principal_id in self.authorized_principals:
+            return True
+
+        return False
+
     @staticmethod
     def hash_value(value: str) -> str:
         """Hash a token value"""
@@ -279,6 +312,8 @@ class ControlToken:
             "updated_at": self.updated_at.isoformat(),
             "parent_token_id": self.parent_token_id,
             "child_token_ids": self.child_token_ids,
+            "principal_id": self.principal_id,
+            "authorized_principals": self.authorized_principals,
         }
 
     @classmethod
@@ -307,6 +342,8 @@ class ControlToken:
             updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else datetime.now(timezone.utc),
             parent_token_id=data.get("parent_token_id"),
             child_token_ids=data.get("child_token_ids", []),
+            principal_id=data.get("principal_id"),
+            authorized_principals=data.get("authorized_principals", []),
         )
 
     @classmethod
@@ -320,7 +357,9 @@ class ControlToken:
         provenance_source: str = "system",
         provenance_method: ProvenanceMethod = ProvenanceMethod.GENERATED,
         valid_days: int = None,
-        metadata: Dict[str, Any] = None
+        metadata: Dict[str, Any] = None,
+        principal_id: str = None,
+        authorized_principals: List[str] = None
     ) -> "ControlToken":
         """
         Factory method to create a new control token.
@@ -335,6 +374,8 @@ class ControlToken:
             provenance_method: How it was obtained
             valid_days: Number of days until expiry (None = never)
             metadata: Additional metadata
+            principal_id: The principal URN that owns this token
+            authorized_principals: Additional principals authorized to use this token
 
         Returns:
             New ControlToken instance
@@ -357,5 +398,7 @@ class ControlToken:
             ),
             metadata=metadata or {},
             created_at=now,
-            updated_at=now
+            updated_at=now,
+            principal_id=principal_id,
+            authorized_principals=authorized_principals or [],
         )
