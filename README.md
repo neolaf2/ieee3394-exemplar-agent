@@ -226,11 +226,24 @@ p3394-agent-starter/
 
 ## Documentation
 
+### Getting Started
 - **[QUICKSTART.md](./QUICKSTART.md)** - 5-minute getting started
-- **[.claude/skills/README.md](./.claude/skills/README.md)** - Skill development guide
+- **[docs/SDK_DEVELOPER_GUIDE.md](./docs/SDK_DEVELOPER_GUIDE.md)** - Build your own agents (Companion & Task patterns)
+
+### Architecture
+- **[CLAUDE.md](./CLAUDE.md)** - Complete architecture specification
+- **[docs/P3394-LONG-TERM-MEMORY-SPEC.md](./docs/P3394-LONG-TERM-MEMORY-SPEC.md)** - KSTAR Memory architecture
+
+### Channels & Integration
+- **[docs/MCP_CHANNEL.md](./docs/MCP_CHANNEL.md)** - MCP channel adapter (inbound/outbound)
+- **[docs/CHANNEL_BINDING.md](./docs/CHANNEL_BINDING.md)** - Channel authentication
+
+### Capabilities & Security
 - **[docs/CAPABILITY_CATALOG.md](./docs/CAPABILITY_CATALOG.md)** - Capability discovery and catalog
 - **[docs/CAPABILITY_ACL.md](./docs/CAPABILITY_ACL.md)** - Access control system
-- **[CLAUDE.md](./CLAUDE.md)** - Complete architecture specification
+
+### Skills
+- **[.claude/skills/README.md](./.claude/skills/README.md)** - Skill development guide
 
 ## Development
 
