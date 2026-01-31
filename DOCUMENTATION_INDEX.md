@@ -31,11 +31,13 @@ Complete index of all documentation for the IEEE 3394 Exemplar Agent.
 
 | Document | Description | Audience |
 |----------|-------------|----------|
+| **[docs/CAPABILITY_CATALOG.md](./docs/CAPABILITY_CATALOG.md)** | Capability discovery and system↔memory synchronization | Developers |
 | **[docs/CAPABILITY_ACL.md](./docs/CAPABILITY_ACL.md)** | Three-layer authorization cascade (Channel→Principal→Capability) | Developers, Auditors |
 | **[docs/CHANNEL_BINDING.md](./docs/CHANNEL_BINDING.md)** | Channel binding and authentication | Developers |
 
 ### Key Concepts
 
+- **Capability Catalog**: Unified view of all capabilities with system↔memory sync
 - **Three-Layer Authorization Cascade**: Channel Auth → Principal Resolution → Capability Role Mapping
 - **Visibility Tiers**: PUBLIC, LISTED, PROTECTED, PRIVATE, ADMIN for capability visibility
 - **LRXMD Permissions**: List, Read, Execute, Modify, Delete for fine-grained access
@@ -249,7 +251,7 @@ Complete index of all documentation for the IEEE 3394 Exemplar Agent.
 | 📝 Draft | Document is in draft form |
 | 🗂️ Archive | Historical document, may be outdated |
 
-**Last Updated**: 2026-01-29
+**Last Updated**: 2026-01-31
 
 ---
 

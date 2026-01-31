@@ -8,6 +8,7 @@ Build P3394-compliant agents with this template. Clone, customize, and deploy yo
 - **Multi-Channel Architecture** - CLI, Web, WhatsApp, and API channels with unified routing
 - **Configurable Identity** - Customize agent name, version, and behavior via `agent.yaml`
 - **Skills System** - Auto-load capabilities from `.claude/skills/` directory
+- **Capability Catalog** - Unified discovery with system↔memory synchronization
 - **Authentication & Authorization** - Built-in security with progressive authentication
 - **Hook System** - Extensible security, logging, and compliance hooks
 
@@ -227,6 +228,8 @@ p3394-agent-starter/
 
 - **[QUICKSTART.md](./QUICKSTART.md)** - 5-minute getting started
 - **[.claude/skills/README.md](./.claude/skills/README.md)** - Skill development guide
+- **[docs/CAPABILITY_CATALOG.md](./docs/CAPABILITY_CATALOG.md)** - Capability discovery and catalog
+- **[docs/CAPABILITY_ACL.md](./docs/CAPABILITY_ACL.md)** - Access control system
 - **[CLAUDE.md](./CLAUDE.md)** - Complete architecture specification
 
 ## Development
