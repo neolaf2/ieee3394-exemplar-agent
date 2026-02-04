@@ -19,7 +19,7 @@ import logging
 import shutil
 
 if TYPE_CHECKING:
-    from config.schema import SessionConfig
+    from ..config.schema import SessionConfig
     from .capability_acl import CapabilityAccessControl, CapabilityPermission
     from .auth.principal import Principal, AssuranceLevel
 

@@ -3,10 +3,10 @@
 # Environment variables can be used: ${VAR_NAME} or ${VAR_NAME:-default}
 
 agent:
-  id: "p3394-exemplar"
-  name: "P3394 Exemplar Agent"
-  version: "0.2.0"
-  description: "Reference implementation of the IEEE P3394 Agent Interface Standard"
+  id: "student-companion"
+  name: "Student Companion"
+  version: "0.1.0"
+  description: "Your AI-powered study partner for university and college success - helping with concept explanation, study planning, and academic skill development"
 
 # Channel configuration
 # All channels are enabled by default when running as daemon
@@ -25,7 +25,7 @@ channels:
   web:
     enabled: true
     host: "0.0.0.0"
-    port: 8000
+    port: 8088
     routes:
       chat: "/"              # Web chat UI at root
       anthropic_api: "/v1"   # Anthropic API at /v1/messages
@@ -53,9 +53,13 @@ skills:
     enabled: true
   - name: "help"
     enabled: true
-  - name: "site-generator"
+  - name: "study-planner"
     enabled: true
-  - name: "p3394-explainer"
+  - name: "concept-explainer"
+    enabled: true
+  - name: "quiz-generator"
+    enabled: true
+  - name: "homework-helper"
     enabled: true
 
 # LLM configuration
@@ -70,17 +74,27 @@ llm:
 
     {agent_description}
 
-    Your role:
-    - Demonstrate P3394 Universal Message Format (UMF) in action
-    - Help users understand and implement the P3394 standard
-    - Provide examples of agent-to-agent communication
-    - Show best practices for channel adapters and content negotiation
+    Your role as a university/college study companion:
+    - Help students understand complex concepts through clear explanations and analogies
+    - Guide study planning and time management strategies
+    - Assist with breaking down large assignments into manageable tasks
+    - Provide practice questions and quiz yourself features
+    - Encourage critical thinking rather than giving direct answers
+    - Support academic writing and research skills
+
+    Pedagogical approach:
+    - Use the Socratic method when appropriate - ask guiding questions
+    - Connect new concepts to prior knowledge
+    - Provide multiple perspectives and examples
+    - Celebrate progress and effort, not just outcomes
+    - Be patient and encouraging, especially with difficult topics
 
     When responding:
-    1. Structure all outputs as valid P3394 messages internally
-    2. Explain P3394 concepts clearly when asked
-    3. Demonstrate capabilities rather than just describing them
-    4. Be helpful, accurate, and concise
+    1. First understand what the student is trying to learn or accomplish
+    2. Break complex topics into digestible pieces
+    3. Use analogies and real-world examples when helpful
+    4. Offer to go deeper or provide practice opportunities
+    5. Be supportive but honest about areas needing improvement
 
 # Session configuration
 sessions:

@@ -756,8 +756,8 @@ uv run python -m p3394_agent import-memory --from backup.kstar
 
 ## See Also
 
-- [README.md](../README.md) - Quick start guide
-- [CLAUDE.md](../CLAUDE.md) - Full architecture specification
-- [MCP_CHANNEL.md](./MCP_CHANNEL.md) - MCP integration
-- [CAPABILITY_ACL.md](./CAPABILITY_ACL.md) - Access control
-- [P3394-LONG-TERM-MEMORY-SPEC.md](./P3394-LONG-TERM-MEMORY-SPEC.md) - Memory architecture
+- [README.md](../../README.md) - Quick start guide
+- [CLAUDE.md](../../CLAUDE.md) - Full architecture specification
+- [MCP Channel](../architecture/MCP_CHANNEL.md) - MCP integration
+- [Capability ACL](../reference/CAPABILITY_ACL.md) - Access control
+- [P3394 Memory Spec](../architecture/P3394-LONG-TERM-MEMORY-SPEC.md) - Memory architecture

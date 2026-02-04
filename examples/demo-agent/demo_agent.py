@@ -9,10 +9,10 @@ This demonstrates all the agent's capabilities:
 """
 import asyncio
 import os
-from src.ieee3394_agent.core.gateway import AgentGateway
-from src.ieee3394_agent.memory.kstar import KStarMemory
-from src.ieee3394_agent.core.umf import P3394Message
-from src.ieee3394_agent.plugins.hooks import set_kstar_memory
+from p3394_agent.core.gateway import AgentGateway
+from p3394_agent.memory.kstar import KStarMemory
+from p3394_agent.core.umf import P3394Message
+from p3394_agent.plugins.hooks import set_kstar_memory
 
 
 def print_section(title: str):

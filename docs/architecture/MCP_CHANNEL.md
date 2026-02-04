@@ -302,6 +302,6 @@ The same P3394 UMF message is created, carrying identical semantic meaning. The 
 
 ## See Also
 
-- [P3394-LONG-TERM-MEMORY-SPEC.md](./P3394-LONG-TERM-MEMORY-SPEC.md) - KSTAR Memory as P3394 Subagent
-- [CHANNEL_BINDING.md](./CHANNEL_BINDING.md) - Channel authentication
-- [CAPABILITY_CATALOG.md](./CAPABILITY_CATALOG.md) - Capability discovery
+- [P3394 Memory Spec](./P3394-LONG-TERM-MEMORY-SPEC.md) - KSTAR Memory as P3394 Subagent
+- [Channel Binding](../reference/CHANNEL_BINDING.md) - Channel authentication
+- [Capability Catalog](../reference/CAPABILITY_CATALOG.md) - Capability discovery
