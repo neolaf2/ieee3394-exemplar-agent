@@ -24,11 +24,7 @@ from .channels.unified_web_server import UnifiedWebServer
 from .data.repos.auth import AuthRepository
 
 # Import config
-try:
-    from config import load_config, AgentConfig
-except ImportError:
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-    from config import load_config, AgentConfig
+from .config import load_config, AgentConfig
 
 logger = logging.getLogger(__name__)
 

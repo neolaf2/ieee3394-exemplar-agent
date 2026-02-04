@@ -43,9 +43,9 @@ async def load_bootstrap_config(
         logger.warning("No memory instance provided for bootstrap")
         return {"acls": 0, "principals": 0, "credential_bindings": 0}
 
-    # Default config path
+    # Default config path - look in package's config directory
     if config_path is None:
-        config_path = Path.cwd() / "config" / "bootstrap_acl.json"
+        config_path = Path(__file__).parent.parent / "config" / "bootstrap_acl.json"
 
     if not config_path.exists():
         logger.info(f"No bootstrap config found at {config_path}")
@@ -192,10 +192,16 @@ class BootstrapManager:
         default_results = await self.memory.load_bootstrap_data(default_config)
         self._merge_results(results, default_results)
 
-        # Load from config directory
-        config_path = self.working_dir / "config" / "bootstrap_acl.json"
-        if config_path.exists():
-            file_results = await load_bootstrap_config(config_path, self.memory)
+        # Load from package config directory
+        pkg_config_path = Path(__file__).parent.parent / "config" / "bootstrap_acl.json"
+        if pkg_config_path.exists():
+            file_results = await load_bootstrap_config(pkg_config_path, self.memory)
+            self._merge_results(results, file_results)
+
+        # Also check working directory for user overrides
+        wd_config_path = self.working_dir / "config" / "bootstrap_acl.json"
+        if wd_config_path.exists() and wd_config_path != pkg_config_path:
+            file_results = await load_bootstrap_config(wd_config_path, self.memory)
             self._merge_results(results, file_results)
 
         # Load from environment-specified path

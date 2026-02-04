@@ -340,5 +340,5 @@ await catalog.add_capability(new_skill)
 ## Related Documentation
 
 - **[CAPABILITY_ACL.md](./CAPABILITY_ACL.md)** - Access control for capabilities
-- **[.claude/skills/README.md](../.claude/skills/README.md)** - Skills development guide
-- **[ACD_IMPLEMENTATION_SUMMARY.md](../ACD_IMPLEMENTATION_SUMMARY.md)** - Agent Capability Descriptor
+- **[Skills README](../../.claude/skills/README.md)** - Skills development guide
+- **[ACD Implementation Summary](../implementation/ACD_IMPLEMENTATION_SUMMARY.md)** - Agent Capability Descriptor

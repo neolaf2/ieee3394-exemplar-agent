@@ -265,13 +265,13 @@ Every message follows the P3394 Universal Message Format standard.
 | Goal | Resource |
 |------|----------|
 | Full installation guide | [INSTALLATION.md](./INSTALLATION.md) |
-| Add custom skills | [.claude/skills/README.md](./.claude/skills/README.md) |
-| Build Companion or Task agents | [docs/SDK_DEVELOPER_GUIDE.md](./docs/SDK_DEVELOPER_GUIDE.md) |
-| Configure authentication | [docs/CHANNEL_BINDING.md](./docs/CHANNEL_BINDING.md) |
-| MCP integration | [docs/MCP_CHANNEL.md](./docs/MCP_CHANNEL.md) |
+| Add custom skills | [Skills README](../../.claude/skills/README.md) |
+| Build Companion or Task agents | [SDK Developer Guide](./SDK_DEVELOPER_GUIDE.md) |
+| Configure authentication | [Channel Binding](../reference/CHANNEL_BINDING.md) |
+| MCP integration | [MCP Channel](../architecture/MCP_CHANNEL.md) |
 | Guided setup (Claude Code) | `/agent-factory` skill |
 
 ## Learn More
 
 - **[P3394 Standard](https://ieee3394.org)** - Learn about the IEEE standard
-- **[Architecture Spec](./CLAUDE.md)** - Complete architecture documentation
+- **[Architecture Spec](../../CLAUDE.md)** - Complete architecture documentation

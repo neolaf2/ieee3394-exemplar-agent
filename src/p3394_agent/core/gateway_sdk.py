@@ -29,7 +29,7 @@ from .capability_catalog import CapabilityCatalog
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from config import AgentConfig
+    from ..config import AgentConfig
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class AgentGateway:
         # Load configuration if not provided
         if config is None:
             try:
-                from config import load_config
+                from ..config import load_config
                 config = load_config(working_dir=working_dir)
             except ImportError:
                 # Fallback to defaults

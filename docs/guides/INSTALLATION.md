@@ -489,4 +489,4 @@ After successful installation:
 4. **Set up authentication** - For multi-user deployments
 5. **Deploy** - Use Docker or systemd for production
 
-See [docs/SDK_DEVELOPER_GUIDE.md](./docs/SDK_DEVELOPER_GUIDE.md) for building Companion or Task agents.
+See [SDK Developer Guide](./SDK_DEVELOPER_GUIDE.md) for building Companion or Task agents.
