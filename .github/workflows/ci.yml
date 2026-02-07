@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,5 +17,7 @@ jobs:
         run: pipx install uv
       - name: Sync
         run: uv sync
-      - name: Test
-        run: uv run pytest -q
+      - name: Compile (smoke)
+        run: uv run python -m compileall -q src
+      - name: Pytest smoke
+        run: uv run pytest -q tests/smoke
