@@ -1,0 +1,14 @@
+{
+  "name": "ieee3394-exemplar-agent",
+  "version": "0.2.0",
+  "description": "Reference implementation of IEEE P3394 Agent Interface Standard: UMF messaging core, multi-channel architecture, KSTAR memory, and example agents/demos.",
+  "author": "Richard Tong (neolaf2)",
+  "license": "MIT",
+  "entrypoints": {
+    "commands": [
+      "commands/quickstart.md",
+      "commands/test.md",
+      "commands/serve-webchat.md"
+    ]
+  }
+}
