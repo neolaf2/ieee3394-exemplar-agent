@@ -3,6 +3,14 @@
 Build P3394-compliant agents with this template. Clone, customize, and deploy your own agent in minutes.
 
 ## Features
+## Repository layout (refactor)
+
+- `plugins/ieee3394-exemplar-agent/` — marketplace/plugin wrapper (Claude Code plugin style)
+- `docs/` — consolidated documentation (see `docs/README.md`)
+- `src/` — core implementation
+- `tests/` — test suite
+
+
 
 - **Universal Message Format (UMF)** - Standard message structure for agent communication
 - **Multi-Channel Architecture** - CLI, Web, WhatsApp, and API channels with unified routing
